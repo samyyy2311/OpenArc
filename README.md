@@ -24,45 +24,47 @@ Archie Android is engineered to run cleanly on modern Android devices without un
 ## Project Structure
 
 ```
-├── app/
-│   ├── build.gradle.kts          # Android application build configuration
-│   └── src/main/
-│       ├── AndroidManifest.xml   # Permissions, singleTask MainActivity, intent filters
-│       ├── java/in/caffeinelabs/archie/
-│       │   ├── ArchieApplication.kt   # Application entry point, WebView debugging
-│       │   ├── MainActivity.kt        # Edge-to-edge Compose host & back handler
-│       │   ├── ui/
-│       │   │   ├── components/
-│       │   │   │   ├── BottomOmnibox.kt   # Floating bottom omnibox capsule with loading indicator
-│       │   │   │   ├── BrowserWebView.kt  # Compose AndroidView wrapper for WebView
-│       │   │   │   └── SearchModal.kt     # Full-screen search overlay with paste chip
-│       │   │   ├── state/
-│       │   │   │   ├── BrowserState.kt     # Immutable UI state data class
-│       │   │   │   └── BrowserViewModel.kt # StateFlow & navigation command dispatcher
-│       │   │   └── theme/
-│       │   │       ├── Color.kt           # Dark palette & semantic colors
-│       │   │       └── Theme.kt           # Material 3 theme wrapper
-│       │   └── util/
-│       │       └── UrlSanitizer.kt        # Tracking stripper & domain resolver
-│       └── res/                           # App strings, themes, and resources
-├── build.gradle.kts              # Root build script
-└── settings.gradle.kts           # Root Gradle settings
+app/
+├── build.gradle.kts          # Android application build configuration
+└── src/main/
+    ├── AndroidManifest.xml   # Permissions, singleTask MainActivity, intent filters
+    ├── java/in/caffeinelabs/archie/
+    │   ├── ArchieApplication.kt   # Application entry point, WebView debugging
+    │   ├── MainActivity.kt        # Edge-to-edge Compose host & back handler
+    │   ├── ui/
+    │   │   ├── components/
+    │   │   │   ├── BottomOmnibox.kt   # Floating bottom omnibox pill with progress & controls
+    │   │   │   ├── BrowserWebView.kt  # Compose AndroidView wrapper for WebView
+    │   │   │   ├── SearchModal.kt     # Full-screen search overlay with paste chip
+    │   │   │   ├── TabStackIcon.kt    # Dual-tilted card tab counter icon
+    │   │   │   └── TabSwitcher.kt     # Horizontal card carousel tab switcher
+    │   │   ├── state/
+    │   │   │   ├── BrowserState.kt     # Immutable UI state data class
+    │   │   │   └── BrowserViewModel.kt # StateFlow & navigation command dispatcher
+    │   │   └── theme/
+    │   │       ├── Color.kt           # Dark palette & semantic colors
+    │   │       └── Theme.kt           # Material 3 theme wrapper
+    │   └── util/
+    │       └── UrlSanitizer.kt        # Tracking stripper & domain resolver
+    └── res/                           # App strings, themes, and resources
 ```
 
 ---
 
-## Milestone 1 Implementation
+## Features & Capabilities
 
-Milestone 1 establishes the first working browser foundation:
+Archie delivers a fast, ergonomic mobile browsing experience:
 
-- **WebView Browsing**: Hardware-accelerated web view supporting modern web standards, JavaScript, DOM storage, and zoom controls.
-- **Bottom Omnibox**: Floating dark capsule anchored to the bottom edge displaying the cleaned domain, connection security indicator, and loading progress bar.
-- **Search Overlay**: Immediate search input with auto-focused keyboard, clipboard URL paste chip, query resolution, and search engine integration.
-- **Clean Links (URL Sanitization)**: Automatic stripping of marketing and analytics tracking parameters (`utm_*`, `fbclid`, `gclid`, `mc_eid`, `vero_id`, etc.) ported directly from Archie desktop.
-- **Navigation & Back Handling**: Back navigation handling routing between fullscreen views, search overlays, and internal WebView history.
-- **Fullscreen Video Hooks**: `WebChromeClient.onShowCustomView` and `onHideCustomView` wiring for HTML5 video playback.
-
-*Note on verification*: Milestone 1 code is compiled and verified via Gradle. Runtime interaction physics (dynamic scroll-collapse threshold tuning, predictive back gestures, and hardware video playback across specific device OEMs) remain subject to validation on physical devices and emulators.
+- **Multi-Tab Management**: Multi-tab browsing with an in-memory WebView pool preserving DOM state, scroll positions, and back-forward navigation across tab switches.
+- **Horizontal Card Tab Switcher**: Horizontal snapping card carousel displaying open tabs with titles, domains, favicons, swipe-up to dismiss, and an "Archive All" action.
+- **Bottom Omnibox & Browser Navigation**:
+  - Dual-tilted tab stack icon displaying live open tab count and opening the Tab Switcher.
+  - Floating pill showing connection security lock, clean display domain, and real-time loading progress.
+  - Context menu: New Tab, Reload, Share Link, and Desktop Site toggle.
+- **Search Overlay (`SearchModal`)**: Instant search overlay anchored directly above the software keyboard with clipboard URL paste chip, query resolution, and search engine integration.
+- **Clean Links (URL Sanitization)**: 23 marketing and analytics tracking parameters (`utm_*`, `fbclid`, `gclid`, `mc_eid`, `vero_id`, etc.) stripped automatically without modifying legitimate query parameters.
+- **Hardware-Accelerated WebView**: Modern standards support (DOM storage, zoom controls, isolated file/content access).
+- **Fullscreen Video Handling**: Edge-to-edge HTML5 video playback with transient immersive system bars.
 
 ---
 

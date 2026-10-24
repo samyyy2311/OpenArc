@@ -1,5 +1,10 @@
 package `in`.caffeinelabs.archie.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,11 +31,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -62,6 +71,8 @@ import `in`.caffeinelabs.archie.ui.theme.ArchieBlue
 import `in`.caffeinelabs.archie.ui.theme.ArchieBorder
 import `in`.caffeinelabs.archie.ui.theme.ArchieDarkBg
 import `in`.caffeinelabs.archie.ui.theme.ArchieDarkPill
+import `in`.caffeinelabs.archie.ui.theme.ArchieDarkSurface
+import `in`.caffeinelabs.archie.ui.theme.ArchiePurple
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextMuted
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextPrimary
 
@@ -71,7 +82,7 @@ fun SearchModal(
     viewModel: BrowserViewModel,
     modifier: Modifier = Modifier
 ) {
-    var textFieldValue by remember {
+    var textFieldValue by remember(initialQuery) {
         mutableStateOf(
             TextFieldValue(
                 text = initialQuery,
@@ -79,6 +90,8 @@ fun SearchModal(
             )
         )
     }
+
+    var isBrowseForMe by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -90,18 +103,18 @@ fun SearchModal(
         viewModel.setSearchOpen(false)
     }
 
-    fun submitQuery(raw: String) {
+    fun submitQuery(raw: String, browseForMe: Boolean) {
         val trimmed = raw.trim()
         if (trimmed.isNotBlank()) {
             keyboardController?.hide()
-            viewModel.loadUrl(trimmed)
+            viewModel.loadUrl(trimmed, browseForMe = browseForMe)
         }
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(ArchieDarkBg)
+            .background(ArchieDarkBg.copy(alpha = 0.98f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -137,45 +150,91 @@ fun SearchModal(
             }
 
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {},
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!clipboardContent.isNullOrBlank() && clipboardContent != textFieldValue.text) {
-                    AssistChip(
-                        onClick = {
-                            textFieldValue = TextFieldValue(
-                                text = clipboardContent,
-                                selection = TextRange(clipboardContent.length)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        FilterChip(
+                            selected = isBrowseForMe,
+                            onClick = { isBrowseForMe = !isBrowseForMe },
+                            label = {
+                                Text(
+                                    text = "Browse for me",
+                                    color = if (isBrowseForMe) Color.White else ArchieTextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = if (isBrowseForMe) Color.White else ArchieBlue,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = ArchieDarkPill,
+                                selectedContainerColor = ArchiePurple
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isBrowseForMe,
+                                borderColor = ArchieBorder,
+                                selectedBorderColor = ArchiePurple
+                            ),
+                            shape = RoundedCornerShape(18.dp)
+                        )
+                    }
+
+                    if (!clipboardContent.isNullOrBlank() && clipboardContent != textFieldValue.text) {
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    textFieldValue = TextFieldValue(
+                                        text = clipboardContent,
+                                        selection = TextRange(clipboardContent.length)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = "Paste: $clipboardContent",
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = ArchieTextPrimary,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ContentPaste,
+                                        contentDescription = null,
+                                        tint = ArchieTextMuted,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = ArchieDarkPill,
+                                    labelColor = ArchieTextPrimary
+                                ),
+                                border = AssistChipDefaults.assistChipBorder(
+                                    borderColor = ArchieBorder,
+                                    borderWidth = 1.dp,
+                                    enabled = true
+                                ),
+                                shape = RoundedCornerShape(18.dp)
                             )
-                        },
-                        label = {
-                            Text(
-                                text = "Paste: $clipboardContent",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = ArchieTextPrimary,
-                                fontSize = 13.sp
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Outlined.ContentPaste,
-                                contentDescription = null,
-                                tint = ArchieTextMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = ArchieDarkPill,
-                            labelColor = ArchieTextPrimary
-                        ),
-                        border = AssistChipDefaults.assistChipBorder(
-                            borderColor = ArchieBorder,
-                            borderWidth = 1.dp,
-                            enabled = true
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    )
+                        }
+                    }
                 }
 
                 val pillShape = RoundedCornerShape(26.dp)
@@ -185,15 +244,19 @@ fun SearchModal(
                         .fillMaxWidth()
                         .height(56.dp)
                         .clip(pillShape)
-                        .background(ArchieDarkPill)
-                        .border(1.dp, ArchieBorder, pillShape)
+                        .background(ArchieDarkSurface)
+                        .border(
+                            width = if (isBrowseForMe) 1.5.dp else 1.dp,
+                            color = if (isBrowseForMe) ArchiePurple else ArchieBorder,
+                            shape = pillShape
+                        )
                         .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Search,
+                        imageVector = if (isBrowseForMe) Icons.Outlined.AutoAwesome else Icons.Outlined.Search,
                         contentDescription = null,
-                        tint = ArchieTextMuted,
+                        tint = if (isBrowseForMe) ArchiePurple else ArchieTextMuted,
                         modifier = Modifier.size(20.dp)
                     )
 
@@ -210,21 +273,21 @@ fun SearchModal(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal
                         ),
-                        cursorBrush = SolidColor(ArchieBlue),
+                        cursorBrush = SolidColor(if (isBrowseForMe) ArchiePurple else ArchieBlue),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
                             imeAction = ImeAction.Search
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = { submitQuery(textFieldValue.text) }
+                            onSearch = { submitQuery(textFieldValue.text, isBrowseForMe) }
                         ),
                         decorationBox = { innerTextField ->
                             if (textFieldValue.text.isEmpty()) {
                                 Text(
-                                    text = "Search or enter URL",
+                                    text = if (isBrowseForMe) "Ask or search with Browse for me..." else "Search or enter URL",
                                     color = ArchieTextMuted,
-                                    fontSize = 16.sp
+                                    fontSize = 15.sp
                                 )
                             }
                             innerTextField()
@@ -250,8 +313,8 @@ fun SearchModal(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(ArchieBlue)
-                                .clickable { submitQuery(textFieldValue.text) },
+                                .background(if (isBrowseForMe) ArchiePurple else ArchieBlue)
+                                .clickable { submitQuery(textFieldValue.text, isBrowseForMe) },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(

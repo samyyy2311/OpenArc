@@ -7,6 +7,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,6 +29,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import `in`.caffeinelabs.archie.ui.components.BottomOmnibox
 import `in`.caffeinelabs.archie.ui.components.BrowserWebView
 import `in`.caffeinelabs.archie.ui.components.SearchModal
+import `in`.caffeinelabs.archie.ui.components.TabSwitcher
 import `in`.caffeinelabs.archie.ui.state.BrowserViewModel
 import `in`.caffeinelabs.archie.ui.theme.ArchieTheme
 
@@ -37,7 +43,7 @@ class MainActivity : ComponentActivity() {
 
         intent?.dataString?.let { incomingUrl ->
             if (incomingUrl.isNotBlank()) {
-                viewModel.loadUrl(incomingUrl)
+                viewModel.openNewTab(incomingUrl, openSearchImmediately = false)
             }
         }
 
@@ -59,12 +65,18 @@ class MainActivity : ComponentActivity() {
                 }
 
                 BackHandler(
-                    enabled = state.customFullscreenView != null || state.isSearchOpen || state.canGoBack
+                    enabled = state.customFullscreenView != null ||
+                            state.isSearchOpen ||
+                            state.isTabSwitcherOpen ||
+                            state.isMenuOpen ||
+                            state.activeTab.canGoBack
                 ) {
                     when {
                         state.customFullscreenView != null -> viewModel.closeFullscreen()
                         state.isSearchOpen -> viewModel.setSearchOpen(false)
-                        state.canGoBack -> viewModel.goBack()
+                        state.isTabSwitcherOpen -> viewModel.setTabSwitcherOpen(false)
+                        state.isMenuOpen -> viewModel.setMenuOpen(false)
+                        state.activeTab.canGoBack -> viewModel.goBack()
                     }
                 }
 
@@ -75,6 +87,7 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         BrowserWebView(
                             viewModel = viewModel,
+                            activeTabId = state.activeTabId,
                             modifier = Modifier.fillMaxSize()
                         )
 
@@ -86,9 +99,24 @@ class MainActivity : ComponentActivity() {
                                 .navigationBarsPadding()
                         )
 
-                        if (state.isSearchOpen) {
+                        AnimatedVisibility(
+                            visible = state.isTabSwitcherOpen,
+                            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
+                            exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 4 })
+                        ) {
+                            TabSwitcher(
+                                state = state,
+                                viewModel = viewModel
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = state.isSearchOpen,
+                            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                            exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                        ) {
                             SearchModal(
-                                initialQuery = state.currentUrl,
+                                initialQuery = state.activeTab.url,
                                 viewModel = viewModel
                             )
                         }
@@ -111,7 +139,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         intent.dataString?.let { incomingUrl ->
             if (incomingUrl.isNotBlank()) {
-                viewModel.loadUrl(incomingUrl)
+                viewModel.openNewTab(incomingUrl, openSearchImmediately = false)
             }
         }
     }

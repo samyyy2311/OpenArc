@@ -103,7 +103,7 @@ object UrlSanitizer {
         }
     }
 
-    fun resolveQuery(query: String): String {
+    fun resolveQuery(query: String, browseForMe: Boolean = false): String {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return "https://en.wikipedia.org"
 
@@ -126,7 +126,12 @@ object UrlSanitizer {
         } catch (_: Exception) {
             trimmed
         }
-        return "https://www.google.com/search?q=$encoded"
+
+        return if (browseForMe) {
+            "https://www.perplexity.ai/search?q=$encoded"
+        } else {
+            "https://www.google.com/search?q=$encoded"
+        }
     }
 
     fun extractDisplayDomain(url: String): String {

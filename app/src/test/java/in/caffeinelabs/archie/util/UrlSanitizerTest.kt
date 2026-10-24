@@ -147,6 +147,12 @@ class UrlSanitizerTest {
     }
 
     @Test
+    fun resolveQuery_withBrowseForMe_convertsToPerplexitySearch() {
+        assertEquals("https://www.perplexity.ai/search?q=quantum+computing", UrlSanitizer.resolveQuery("quantum computing", browseForMe = true))
+        assertEquals("https://github.com", UrlSanitizer.resolveQuery("https://github.com", browseForMe = true))
+    }
+
+    @Test
     fun extractDisplayDomain_extractsCleanDomain() {
         assertEquals("en.wikipedia.org", UrlSanitizer.extractDisplayDomain("https://en.wikipedia.org/wiki/Kotlin"))
         assertEquals("google.com", UrlSanitizer.extractDisplayDomain("https://www.google.com/search?q=test"))
