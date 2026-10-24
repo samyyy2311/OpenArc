@@ -1,6 +1,7 @@
 package `in`.caffeinelabs.archie.ui.state
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -12,9 +13,11 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import `in`.caffeinelabs.archie.data.TabDatabase
 import `in`.caffeinelabs.archie.util.UrlSanitizer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,7 +35,9 @@ sealed interface NavigationCommand {
     data object StopLoading : NavigationCommand
 }
 
-class BrowserViewModel : ViewModel() {
+class BrowserViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val tabDatabase = TabDatabase(application)
 
     private val _state = MutableStateFlow(BrowserState())
     val state: StateFlow<BrowserState> = _state.asStateFlow()
@@ -42,6 +47,36 @@ class BrowserViewModel : ViewModel() {
 
     private val webViewPool = mutableMapOf<String, WebView>()
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val records = tabDatabase.getAllActiveTabs()
+            if (records.isNotEmpty()) {
+                val loadedTabs = records.map {
+                    Tab(
+                        id = it.id,
+                        url = it.url,
+                        title = it.title,
+                        isPinned = it.isPinned
+                    )
+                }
+                _state.update { current ->
+                    current.copy(
+                        tabs = loadedTabs,
+                        activeTabId = loadedTabs.first().id
+                    )
+                }
+            } else {
+                val defaultTab = _state.value.tabs.first()
+                tabDatabase.saveTab(
+                    id = defaultTab.id,
+                    url = defaultTab.url,
+                    title = defaultTab.title,
+                    isPinned = false
+                )
+            }
+        }
+    }
 
     companion object {
         private const val DESKTOP_USER_AGENT =
@@ -179,9 +214,9 @@ class BrowserViewModel : ViewModel() {
         return webView
     }
 
-    fun openNewTab(url: String = "", openSearchImmediately: Boolean = true) {
+    fun openNewTab(url: String = "", openSearchImmediately: Boolean = true, isPinned: Boolean = false) {
         val initialUrl = if (url.isNotBlank()) UrlSanitizer.cleanUrl(UrlSanitizer.resolveQuery(url)) else "https://en.wikipedia.org"
-        val newTab = Tab(url = initialUrl)
+        val newTab = Tab(url = initialUrl, isPinned = isPinned)
         _state.update { current ->
             current.copy(
                 tabs = current.tabs + newTab,
@@ -190,6 +225,9 @@ class BrowserViewModel : ViewModel() {
                 isSearchOpen = openSearchImmediately,
                 isMenuOpen = false
             )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            tabDatabase.saveTab(newTab.id, newTab.url, newTab.title, isPinned)
         }
     }
 
@@ -201,6 +239,26 @@ class BrowserViewModel : ViewModel() {
                 isMenuOpen = false
             )
         }
+        val tab = _state.value.tabs.find { it.id == tabId }
+        if (tab != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                tabDatabase.updateTabMetadata(tabId, tab.url, tab.title)
+            }
+        }
+    }
+
+    fun togglePinTab(tabId: String) {
+        val tab = _state.value.tabs.find { it.id == tabId } ?: return
+        val newPinned = !tab.isPinned
+        _state.update { current ->
+            val updatedTabs = current.tabs.map {
+                if (it.id == tabId) it.copy(isPinned = newPinned) else it
+            }
+            current.copy(tabs = updatedTabs)
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            tabDatabase.setPinned(tabId, newPinned)
+        }
     }
 
     fun closeTab(tabId: String) {
@@ -209,9 +267,16 @@ class BrowserViewModel : ViewModel() {
             destroy()
         }
 
+        viewModelScope.launch(Dispatchers.IO) {
+            tabDatabase.deleteTab(tabId)
+        }
+
         val remaining = _state.value.tabs.filter { it.id != tabId }
         if (remaining.isEmpty()) {
             val fresh = Tab()
+            viewModelScope.launch(Dispatchers.IO) {
+                tabDatabase.saveTab(fresh.id, fresh.url, fresh.title, false)
+            }
             _state.update {
                 it.copy(
                     tabs = listOf(fresh),
@@ -238,21 +303,43 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun archiveAllTabs() {
-        webViewPool.values.forEach {
-            it.stopLoading()
-            it.destroy()
-        }
-        webViewPool.clear()
+        val pinnedTabs = _state.value.tabs.filter { it.isPinned }
+        val nonPinnedIds = _state.value.tabs.filter { !it.isPinned }.map { it.id }
 
-        val freshTab = Tab()
-        _state.update {
-            it.copy(
-                tabs = listOf(freshTab),
-                activeTabId = freshTab.id,
-                isTabSwitcherOpen = false,
-                isSearchOpen = true,
-                isMenuOpen = false
-            )
+        nonPinnedIds.forEach { id ->
+            webViewPool.remove(id)?.apply {
+                stopLoading()
+                destroy()
+            }
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            tabDatabase.archiveNonPinnedTabs()
+        }
+
+        if (pinnedTabs.isNotEmpty()) {
+            _state.update {
+                it.copy(
+                    tabs = pinnedTabs,
+                    activeTabId = pinnedTabs.first().id,
+                    isTabSwitcherOpen = false,
+                    isMenuOpen = false
+                )
+            }
+        } else {
+            val freshTab = Tab()
+            viewModelScope.launch(Dispatchers.IO) {
+                tabDatabase.saveTab(freshTab.id, freshTab.url, freshTab.title, false)
+            }
+            _state.update {
+                it.copy(
+                    tabs = listOf(freshTab),
+                    activeTabId = freshTab.id,
+                    isTabSwitcherOpen = false,
+                    isSearchOpen = true,
+                    isMenuOpen = false
+                )
+            }
         }
     }
 
@@ -383,6 +470,12 @@ class BrowserViewModel : ViewModel() {
             }
             current.copy(tabs = updatedTabs)
         }
+        val tab = _state.value.tabs.find { it.id == tabId }
+        if (tab != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                tabDatabase.updateTabMetadata(tabId, cleaned, tab.title)
+            }
+        }
     }
 
     private fun onProgressChangedForTab(tabId: String, progress: Int) {
@@ -405,6 +498,12 @@ class BrowserViewModel : ViewModel() {
                 if (it.id == tabId) it.copy(title = title) else it
             }
             current.copy(tabs = updatedTabs)
+        }
+        val tab = _state.value.tabs.find { it.id == tabId }
+        if (tab != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                tabDatabase.updateTabMetadata(tabId, tab.url, title)
+            }
         }
     }
 

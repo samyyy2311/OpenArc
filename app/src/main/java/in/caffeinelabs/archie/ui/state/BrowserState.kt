@@ -14,6 +14,7 @@ data class Tab(
     val loadingProgress: Int = 0,
     val isLoading: Boolean = false,
     val isDesktopMode: Boolean = false,
+    val isPinned: Boolean = false,
     val themeColor: Long? = null
 )
 

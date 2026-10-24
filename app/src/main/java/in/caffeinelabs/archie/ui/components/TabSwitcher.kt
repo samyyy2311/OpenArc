@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,7 +91,6 @@ fun TabSwitcher(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
 
     LaunchedEffect(state.activeTabId) {
@@ -110,48 +111,91 @@ fun TabSwitcher(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Tabs",
-                    color = ArchieTextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Box(
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ArchieDarkPill)
-                        .border(1.dp, ArchieBorder, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${state.tabs.size}",
-                        color = ArchieBlue,
-                        fontSize = 12.sp,
+                        text = "Tabs",
+                        color = ArchieTextPrimary,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
-                }
 
-                Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                if (state.tabs.isNotEmpty()) {
-                    TextButton(
-                        onClick = { viewModel.archiveAllTabs() },
-                        colors = ButtonDefaults.textButtonColors(contentColor = ArchieDestructive)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ArchieDarkPill)
+                            .border(1.dp, ArchieBorder, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "Archive All",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
+                            text = "${state.tabs.size}",
+                            color = ArchieBlue,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    val hasNonPinned = state.tabs.any { !it.isPinned }
+                    if (hasNonPinned) {
+                        TextButton(
+                            onClick = { viewModel.archiveAllTabs() },
+                            colors = ButtonDefaults.textButtonColors(contentColor = ArchieDestructive)
+                        ) {
+                            Text(
+                                text = "Archive All",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                val pinnedTabs = state.tabs.filter { it.isPinned }
+                if (pinnedTabs.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    ) {
+                        items(pinnedTabs, key = { "pin_${it.id}" }) { pinTab ->
+                            val isPinActive = pinTab.id == state.activeTabId
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isPinActive) ArchieBlue.copy(alpha = 0.2f) else ArchieDarkPill)
+                                    .border(1.dp, if (isPinActive) ArchieBlue else ArchieBorder, RoundedCornerShape(16.dp))
+                                    .clickable { viewModel.selectTab(pinTab.id) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.PushPin,
+                                    contentDescription = null,
+                                    tint = ArchieBlue,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (pinTab.title.isNotBlank()) pinTab.title else UrlSanitizer.extractDisplayDomain(pinTab.url),
+                                    color = ArchieTextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -179,6 +223,7 @@ fun TabSwitcher(
                             isActive = isActive,
                             width = cardWidth,
                             onSelect = { viewModel.selectTab(tab.id) },
+                            onTogglePin = { viewModel.togglePinTab(tab.id) },
                             onClose = { viewModel.closeTab(tab.id) }
                         )
                     }
@@ -250,12 +295,12 @@ private fun TabCard(
     isActive: Boolean,
     width: androidx.compose.ui.unit.Dp,
     onSelect: () -> Unit,
+    onTogglePin: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetY = remember { Animatable(0f) }
-    var isDismissed by remember { androidx.compose.runtime.mutableStateOf(false) }
 
     val displayDomain = UrlSanitizer.extractDisplayDomain(tab.url)
     val cardCornerRadius = 22.dp
@@ -345,6 +390,20 @@ private fun TabCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+
+                IconButton(
+                    onClick = onTogglePin,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = if (tab.isPinned) "Unpin tab" else "Pin tab",
+                        tint = if (tab.isPinned) ArchieBlue else ArchieTextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
 
                 IconButton(
                     onClick = onClose,

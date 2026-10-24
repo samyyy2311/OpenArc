@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
@@ -118,6 +119,27 @@ fun BottomOmnibox(
                                 putExtra(Intent.EXTRA_TEXT, activeTab.url)
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Link"))
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (activeTab.isPinned) "Unpin Tab" else "Pin Tab",
+                                color = if (activeTab.isPinned) ArchieBlue else ArchieTextPrimary,
+                                fontSize = 14.sp
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.PushPin,
+                                contentDescription = null,
+                                tint = if (activeTab.isPinned) ArchieBlue else ArchieTextMuted
+                            )
+                        },
+                        onClick = {
+                            viewModel.setMenuOpen(false)
+                            viewModel.togglePinTab(activeTab.id)
                         }
                     )
 
