@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Archie</string>
+    <string name="search_hint">Search or enter URL</string>
+    <string name="search_action">Search</string>
+    <string name="clear_query">Clear</string>
+    <string name="paste_clipboard">Paste from clipboard</string>
+</resources>
