@@ -107,7 +107,24 @@ class ArchieWebViewClient(
 
     override fun onPageFinished(view: WebView?, url: String?) {
         url?.let { listener.onPageFinished(it) }
-        view?.let { listener.onHistoryChanged(it.canGoBack(), it.canGoForward()) }
+        view?.let {
+            listener.onHistoryChanged(it.canGoBack(), it.canGoForward())
+            it.evaluateJavascript(
+                """
+                (function() {
+                    try {
+                        if (document.body) {
+                            var current = parseInt(window.getComputedStyle(document.body).paddingBottom || '0', 10);
+                            if (current < 80) {
+                                document.body.style.paddingBottom = (current + 80) + 'px';
+                            }
+                        }
+                    } catch (_) {}
+                })();
+                """.trimIndent(),
+                null
+            )
+        }
     }
 
     override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {

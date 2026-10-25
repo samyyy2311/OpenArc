@@ -229,6 +229,7 @@ class MainActivity : ComponentActivity() {
                             activeTab = activeTab,
                             engineManager = webEngineManager,
                             eventListener = eventListener,
+                            onRefresh = { viewModel.onAction(BrowserAction.Reload) },
                             modifier = Modifier.fillMaxSize()
                         )
 

@@ -45,7 +45,7 @@ class WebEngineManager(
             return existing
         }
 
-        val webView = WebView(context).apply {
+        val webView = ArchieWebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
