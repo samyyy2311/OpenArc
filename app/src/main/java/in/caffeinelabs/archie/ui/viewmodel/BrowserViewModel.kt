@@ -36,6 +36,7 @@ sealed interface NavigationEffect {
     data class FindAll(val tabId: String, val query: String) : NavigationEffect
     data class FindNext(val tabId: String, val forward: Boolean) : NavigationEffect
     data class ClearFindMatches(val tabId: String) : NavigationEffect
+    data class ClearBrowsingData(val clearCache: Boolean, val clearCookies: Boolean) : NavigationEffect
 }
 
 class BrowserViewModel(
@@ -107,6 +108,9 @@ class BrowserViewModel(
             is BrowserAction.SetFindInPageOpen -> handleSetFindInPageOpen(action.isOpen)
             is BrowserAction.SetFindQuery -> handleSetFindQuery(action.query)
             is BrowserAction.FindNext -> _effects.tryEmit(NavigationEffect.FindNext(_uiState.value.activeTabId, action.forward))
+            is BrowserAction.SetHistoryOpen -> handleSetHistoryOpen(action.isOpen)
+            is BrowserAction.DeleteHistoryItem -> handleDeleteHistoryItem(action.url)
+            is BrowserAction.ClearBrowsingData -> handleClearBrowsingData(action.clearHistory, action.clearCache, action.clearCookies)
             is BrowserAction.SearchHistory -> handleSearchHistory(action.query)
             is BrowserAction.GoBack -> _effects.tryEmit(NavigationEffect.GoBack(_uiState.value.activeTabId))
             is BrowserAction.GoForward -> _effects.tryEmit(NavigationEffect.GoForward(_uiState.value.activeTabId))
@@ -341,8 +345,51 @@ class BrowserViewModel(
 
     private fun handleSearchHistory(query: String) {
         viewModelScope.launch(ioDispatcher) {
-            val results = tabRepository.searchHistory(query)
-            _uiState.update { it.copy(historySearchResults = results) }
+            val results = if (query.isBlank()) {
+                tabRepository.getRecentHistory(100)
+            } else {
+                tabRepository.searchHistory(query)
+            }
+            _uiState.update { it.copy(historySearchResults = results, historyItems = results) }
+        }
+    }
+
+    private fun handleSetHistoryOpen(isOpen: Boolean) {
+        if (isOpen) {
+            viewModelScope.launch(ioDispatcher) {
+                val items = tabRepository.getRecentHistory(100)
+                _uiState.update {
+                    it.copy(
+                        isHistoryOpen = true,
+                        historyItems = items,
+                        isMenuOpen = false,
+                        isSearchOpen = false,
+                        isSiteSettingsOpen = false
+                    )
+                }
+            }
+        } else {
+            _uiState.update { it.copy(isHistoryOpen = false) }
+        }
+    }
+
+    private fun handleDeleteHistoryItem(url: String) {
+        viewModelScope.launch(ioDispatcher) {
+            tabRepository.deleteHistoryEntry(url)
+            val updated = tabRepository.getRecentHistory(100)
+            _uiState.update { it.copy(historyItems = updated) }
+        }
+    }
+
+    private fun handleClearBrowsingData(clearHistory: Boolean, clearCache: Boolean, clearCookies: Boolean) {
+        if (clearHistory) {
+            viewModelScope.launch(ioDispatcher) {
+                tabRepository.clearAllHistory()
+                _uiState.update { it.copy(historyItems = emptyList(), historySearchResults = emptyList()) }
+            }
+        }
+        if (clearCache || clearCookies) {
+            _effects.tryEmit(NavigationEffect.ClearBrowsingData(clearCache, clearCookies))
         }
     }
 

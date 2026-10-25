@@ -72,6 +72,18 @@ class FakeTabRepository : TabRepository {
     override suspend fun searchHistory(query: String): List<HistoryEntity> {
         return history.filter { it.url.contains(query) || it.title.contains(query) }
     }
+
+    override suspend fun getRecentHistory(limit: Int): List<HistoryEntity> {
+        return history.sortedByDescending { it.lastVisitedTimestamp }.take(limit)
+    }
+
+    override suspend fun deleteHistoryEntry(url: String) {
+        history.removeAll { it.url == url }
+    }
+
+    override suspend fun clearAllHistory() {
+        history.clear()
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -192,5 +204,30 @@ class BrowserViewModelTest {
         viewModel.onEngineFindResult(viewModel.uiState.value.activeTabId, activeMatchOrdinal = 2, numberOfMatches = 5)
         assertEquals(2, viewModel.uiState.value.findCurrentMatch)
         assertEquals(5, viewModel.uiState.value.findTotalMatches)
+    }
+
+    @Test
+    fun onAction_setHistoryOpen_loadsHistoryAndClearsData() = runTest {
+        advanceUntilIdle()
+        fakeRepo.recordHistoryVisit("https://kotlinlang.org", "Kotlin")
+        fakeRepo.recordHistoryVisit("https://android.com", "Android")
+
+        viewModel.onAction(BrowserAction.SetHistoryOpen(true))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isHistoryOpen)
+        assertEquals(2, viewModel.uiState.value.historyItems.size)
+
+        viewModel.onAction(BrowserAction.DeleteHistoryItem("https://kotlinlang.org"))
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.historyItems.size)
+        assertEquals("https://android.com", viewModel.uiState.value.historyItems.first().url)
+
+        viewModel.onAction(BrowserAction.ClearBrowsingData(clearHistory = true, clearCache = true, clearCookies = false))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.historyItems.isEmpty())
+        assertTrue(fakeRepo.history.isEmpty())
     }
 }

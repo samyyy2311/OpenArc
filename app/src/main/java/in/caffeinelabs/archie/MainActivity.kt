@@ -41,6 +41,7 @@ import `in`.caffeinelabs.archie.engine.WebEngineManager
 import `in`.caffeinelabs.archie.engine.WebViewNavigationListener
 import `in`.caffeinelabs.archie.ui.components.browser.BrowserWebView
 import `in`.caffeinelabs.archie.ui.components.find.FindInPageBar
+import `in`.caffeinelabs.archie.ui.components.history.HistorySheet
 import `in`.caffeinelabs.archie.ui.components.omnibox.BottomOmnibox
 import `in`.caffeinelabs.archie.ui.components.search.SearchModal
 import `in`.caffeinelabs.archie.ui.components.settings.SiteSettingsSheet
@@ -114,6 +115,9 @@ class MainActivity : ComponentActivity() {
                             is NavigationEffect.ClearFindMatches -> {
                                 webEngineManager.clearMatches(effect.tabId)
                             }
+                            is NavigationEffect.ClearBrowsingData -> {
+                                webEngineManager.clearBrowsingData(effect.clearCache, effect.clearCookies)
+                            }
                         }
                     }
                 }
@@ -131,6 +135,7 @@ class MainActivity : ComponentActivity() {
                 BackHandler(
                     enabled = customFullscreenView != null ||
                             state.isFindInPageOpen ||
+                            state.isHistoryOpen ||
                             state.isSiteSettingsOpen ||
                             state.isSearchOpen ||
                             state.isTabSwitcherOpen ||
@@ -140,6 +145,7 @@ class MainActivity : ComponentActivity() {
                     when {
                         customFullscreenView != null -> closeFullscreen()
                         state.isFindInPageOpen -> viewModel.onAction(BrowserAction.SetFindInPageOpen(false))
+                        state.isHistoryOpen -> viewModel.onAction(BrowserAction.SetHistoryOpen(false))
                         state.isSiteSettingsOpen -> viewModel.onAction(BrowserAction.SetSiteSettingsOpen(false))
                         state.isSearchOpen -> viewModel.onAction(BrowserAction.SetSearchOpen(false))
                         state.isTabSwitcherOpen -> viewModel.onAction(BrowserAction.SetTabSwitcherOpen(false))
@@ -266,6 +272,11 @@ class MainActivity : ComponentActivity() {
                         }
 
                         SiteSettingsSheet(
+                            state = state,
+                            onAction = viewModel::onAction
+                        )
+
+                        HistorySheet(
                             state = state,
                             onAction = viewModel::onAction
                         )

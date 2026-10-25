@@ -17,6 +17,9 @@ interface TabRepository {
     suspend fun archiveNonPinnedTabs()
     suspend fun recordHistoryVisit(url: String, title: String)
     suspend fun searchHistory(query: String): List<HistoryEntity>
+    suspend fun getRecentHistory(limit: Int = 100): List<HistoryEntity>
+    suspend fun deleteHistoryEntry(url: String)
+    suspend fun clearAllHistory()
 }
 
 class DefaultTabRepository(context: Context) : TabRepository {
@@ -62,5 +65,17 @@ class DefaultTabRepository(context: Context) : TabRepository {
 
     override suspend fun searchHistory(query: String): List<HistoryEntity> = withContext(Dispatchers.IO) {
         dbHelper.searchHistory(query)
+    }
+
+    override suspend fun getRecentHistory(limit: Int): List<HistoryEntity> = withContext(Dispatchers.IO) {
+        dbHelper.getRecentHistory(limit)
+    }
+
+    override suspend fun deleteHistoryEntry(url: String) = withContext(Dispatchers.IO) {
+        dbHelper.deleteHistoryEntry(url)
+    }
+
+    override suspend fun clearAllHistory() = withContext(Dispatchers.IO) {
+        dbHelper.clearAllHistory()
     }
 }

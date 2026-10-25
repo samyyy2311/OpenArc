@@ -220,6 +220,20 @@ class WebEngineManager(
         }
     }
 
+    fun clearBrowsingData(clearCache: Boolean, clearCookies: Boolean) {
+        if (clearCache) {
+            webViewPool.values.forEach {
+                it.clearCache(true)
+            }
+            snapshotManager.clearAll()
+        }
+        if (clearCookies) {
+            android.webkit.CookieManager.getInstance().removeAllCookies(null)
+            android.webkit.CookieManager.getInstance().flush()
+            android.webkit.WebStorage.getInstance().deleteAllData()
+        }
+    }
+
     fun destroyAll() {
         snapshotManager.clearAll()
         webViewPool.values.forEach {

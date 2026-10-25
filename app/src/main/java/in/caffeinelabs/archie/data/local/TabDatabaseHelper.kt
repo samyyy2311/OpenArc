@@ -282,4 +282,48 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
         }
         return list
     }
+
+    fun getRecentHistory(limit: Int = 100): List<HistoryEntity> {
+        val list = mutableListOf<HistoryEntity>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_HISTORY,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "$COL_HIST_LAST_VISITED DESC",
+            limit.toString()
+        )
+
+        cursor.use { c ->
+            val urlIdx = c.getColumnIndexOrThrow(COL_HIST_URL)
+            val titleIdx = c.getColumnIndexOrThrow(COL_HIST_TITLE)
+            val countIdx = c.getColumnIndexOrThrow(COL_HIST_VISIT_COUNT)
+            val timeIdx = c.getColumnIndexOrThrow(COL_HIST_LAST_VISITED)
+
+            while (c.moveToNext()) {
+                list.add(
+                    HistoryEntity(
+                        url = c.getString(urlIdx),
+                        title = c.getString(titleIdx),
+                        visitCount = c.getInt(countIdx),
+                        lastVisitedTimestamp = c.getLong(timeIdx)
+                    )
+                )
+            }
+        }
+        return list
+    }
+
+    fun deleteHistoryEntry(url: String) {
+        val db = writableDatabase
+        db.delete(TABLE_HISTORY, "$COL_HIST_URL = ?", arrayOf(url))
+    }
+
+    fun clearAllHistory() {
+        val db = writableDatabase
+        db.delete(TABLE_HISTORY, null, null)
+    }
 }

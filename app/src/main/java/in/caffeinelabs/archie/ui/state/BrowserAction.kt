@@ -21,6 +21,9 @@ sealed interface BrowserAction {
     data class SetFindInPageOpen(val isOpen: Boolean) : BrowserAction
     data class SetFindQuery(val query: String) : BrowserAction
     data class FindNext(val forward: Boolean) : BrowserAction
+    data class SetHistoryOpen(val isOpen: Boolean) : BrowserAction
+    data class DeleteHistoryItem(val url: String) : BrowserAction
+    data class ClearBrowsingData(val clearHistory: Boolean, val clearCache: Boolean, val clearCookies: Boolean) : BrowserAction
     data class SearchHistory(val query: String) : BrowserAction
     data object GoBack : BrowserAction
     data object GoForward : BrowserAction

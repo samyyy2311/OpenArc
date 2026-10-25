@@ -29,12 +29,14 @@ data class BrowserUiState(
     val isMenuOpen: Boolean = false,
     val isSiteSettingsOpen: Boolean = false,
     val isFindInPageOpen: Boolean = false,
+    val isHistoryOpen: Boolean = false,
     val findQuery: String = "",
     val findCurrentMatch: Int = 0,
     val findTotalMatches: Int = 0,
     val isBrowseForMe: Boolean = false,
     val isOmniboxVisible: Boolean = true,
-    val historySearchResults: List<HistoryEntity> = emptyList()
+    val historySearchResults: List<HistoryEntity> = emptyList(),
+    val historyItems: List<HistoryEntity> = emptyList()
 ) {
     val activeTab: UiTab
         get() = tabs.find { it.id == activeTabId } ?: tabs.firstOrNull() ?: UiTab()
