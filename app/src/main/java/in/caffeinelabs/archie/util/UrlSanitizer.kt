@@ -103,7 +103,11 @@ object UrlSanitizer {
         }
     }
 
-    fun resolveQuery(query: String, browseForMe: Boolean = false): String {
+    fun resolveQuery(
+        query: String,
+        browseForMe: Boolean = false,
+        searchEngine: String = "Google"
+    ): String {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return "https://en.wikipedia.org"
 
@@ -130,7 +134,13 @@ object UrlSanitizer {
         return if (browseForMe) {
             "https://www.perplexity.ai/search?q=$encoded"
         } else {
-            "https://www.google.com/search?q=$encoded"
+            when (searchEngine.lowercase()) {
+                "duckduckgo" -> "https://duckduckgo.com/?q=$encoded"
+                "brave" -> "https://search.brave.com/search?q=$encoded"
+                "bing" -> "https://www.bing.com/search?q=$encoded"
+                "ecosia" -> "https://www.ecosia.org/search?q=$encoded"
+                else -> "https://www.google.com/search?q=$encoded"
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package `in`.caffeinelabs.archie.ui.viewmodel
 import android.app.Application
 import `in`.caffeinelabs.archie.data.model.HistoryEntity
 import `in`.caffeinelabs.archie.data.model.TabEntity
+import `in`.caffeinelabs.archie.data.repository.SettingsRepository
 import `in`.caffeinelabs.archie.data.repository.TabRepository
 import `in`.caffeinelabs.archie.ui.state.BrowserAction
 import kotlinx.coroutines.Dispatchers
@@ -86,11 +87,18 @@ class FakeTabRepository : TabRepository {
     }
 }
 
+class FakeSettingsRepository : SettingsRepository {
+    override var isGlobalShieldEnabled: Boolean = true
+    override var isForceDarkEnabled: Boolean = false
+    override var defaultSearchEngine: String = "Google"
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class BrowserViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val fakeRepo = FakeTabRepository()
+    private val fakeSettings = FakeSettingsRepository()
     private lateinit var viewModel: BrowserViewModel
 
     @Before
@@ -108,8 +116,7 @@ class BrowserViewModelTest {
             title = "GitHub",
             isPinned = true
         )
-        // Dummy application instance for AndroidViewModel
-        viewModel = BrowserViewModel(Application(), fakeRepo, testDispatcher)
+        viewModel = BrowserViewModel(Application(), fakeRepo, fakeSettings, testDispatcher)
     }
 
     @After
@@ -229,5 +236,25 @@ class BrowserViewModelTest {
 
         assertTrue(viewModel.uiState.value.historyItems.isEmpty())
         assertTrue(fakeRepo.history.isEmpty())
+    }
+
+    @Test
+    fun onAction_setSearchEngine_updatesSettingsAndState() = runTest {
+        advanceUntilIdle()
+        assertEquals("Google", viewModel.uiState.value.selectedSearchEngine)
+
+        viewModel.onAction(BrowserAction.SetSearchEngine("DuckDuckGo"))
+        assertEquals("DuckDuckGo", viewModel.uiState.value.selectedSearchEngine)
+        assertEquals("DuckDuckGo", fakeSettings.defaultSearchEngine)
+    }
+
+    @Test
+    fun onAction_setGlobalShield_updatesSettingsAndState() = runTest {
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isGlobalShieldEnabled)
+
+        viewModel.onAction(BrowserAction.SetGlobalShield(false))
+        assertFalse(viewModel.uiState.value.isGlobalShieldEnabled)
+        assertFalse(fakeSettings.isGlobalShieldEnabled)
     }
 }

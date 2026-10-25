@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -135,6 +136,17 @@ fun OmniboxMenu(
             },
             onClick = {
                 onAction(BrowserAction.SetSiteSettingsOpen(true))
+            }
+        )
+
+        DropdownMenuItem(
+            text = { Text("Settings", color = ArchieTextPrimary, fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(Icons.Outlined.Settings, contentDescription = null, tint = ArchieTextMuted)
+            },
+            onClick = {
+                onAction(BrowserAction.SetMenuOpen(false))
+                onAction(BrowserAction.SetSettingsOpen(true))
             }
         )
 

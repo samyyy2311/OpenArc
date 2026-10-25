@@ -22,6 +22,9 @@ sealed interface BrowserAction {
     data class SetFindQuery(val query: String) : BrowserAction
     data class FindNext(val forward: Boolean) : BrowserAction
     data class SetHistoryOpen(val isOpen: Boolean) : BrowserAction
+    data class SetSettingsOpen(val isOpen: Boolean) : BrowserAction
+    data class SetSearchEngine(val engine: String) : BrowserAction
+    data class SetGlobalShield(val enabled: Boolean) : BrowserAction
     data class DeleteHistoryItem(val url: String) : BrowserAction
     data class ClearBrowsingData(val clearHistory: Boolean, val clearCache: Boolean, val clearCookies: Boolean) : BrowserAction
     data class SearchHistory(val query: String) : BrowserAction

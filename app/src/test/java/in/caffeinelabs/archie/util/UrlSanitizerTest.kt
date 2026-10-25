@@ -141,6 +141,14 @@ class UrlSanitizerTest {
     }
 
     @Test
+    fun resolveQuery_withDifferentSearchEngines() {
+        assertEquals("https://duckduckgo.com/?q=kotlin", UrlSanitizer.resolveQuery("kotlin", searchEngine = "DuckDuckGo"))
+        assertEquals("https://search.brave.com/search?q=kotlin", UrlSanitizer.resolveQuery("kotlin", searchEngine = "Brave"))
+        assertEquals("https://www.bing.com/search?q=kotlin", UrlSanitizer.resolveQuery("kotlin", searchEngine = "Bing"))
+        assertEquals("https://www.ecosia.org/search?q=kotlin", UrlSanitizer.resolveQuery("kotlin", searchEngine = "Ecosia"))
+    }
+
+    @Test
     fun resolveQuery_emptyReturnsDefaultHomepage() {
         assertEquals("https://en.wikipedia.org", UrlSanitizer.resolveQuery(""))
         assertEquals("https://en.wikipedia.org", UrlSanitizer.resolveQuery("   "))

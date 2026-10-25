@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.caffeinelabs.archie.data.model.TabEntity
 import `in`.caffeinelabs.archie.data.repository.DefaultTabRepository
+import `in`.caffeinelabs.archie.data.repository.SettingsRepository
+import `in`.caffeinelabs.archie.data.repository.SharedPreferencesSettingsRepository
 import `in`.caffeinelabs.archie.data.repository.TabRepository
 import `in`.caffeinelabs.archie.domain.shield.BlockedCategory
 import `in`.caffeinelabs.archie.ui.state.BrowserAction
@@ -42,10 +44,16 @@ sealed interface NavigationEffect {
 class BrowserViewModel(
     application: Application,
     private val tabRepository: TabRepository = DefaultTabRepository(application),
+    private val settingsRepository: SettingsRepository = SharedPreferencesSettingsRepository(application),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(BrowserUiState())
+    private val _uiState = MutableStateFlow(
+        BrowserUiState(
+            selectedSearchEngine = settingsRepository.defaultSearchEngine,
+            isGlobalShieldEnabled = settingsRepository.isGlobalShieldEnabled
+        )
+    )
     val uiState: StateFlow<BrowserUiState> = _uiState.asStateFlow()
 
     private val _effects = MutableSharedFlow<NavigationEffect>(extraBufferCapacity = 16)
@@ -109,6 +117,9 @@ class BrowserViewModel(
             is BrowserAction.SetFindQuery -> handleSetFindQuery(action.query)
             is BrowserAction.FindNext -> _effects.tryEmit(NavigationEffect.FindNext(_uiState.value.activeTabId, action.forward))
             is BrowserAction.SetHistoryOpen -> handleSetHistoryOpen(action.isOpen)
+            is BrowserAction.SetSettingsOpen -> _uiState.update { it.copy(isSettingsOpen = action.isOpen, isMenuOpen = false) }
+            is BrowserAction.SetSearchEngine -> handleSetSearchEngine(action.engine)
+            is BrowserAction.SetGlobalShield -> handleSetGlobalShield(action.enabled)
             is BrowserAction.DeleteHistoryItem -> handleDeleteHistoryItem(action.url)
             is BrowserAction.ClearBrowsingData -> handleClearBrowsingData(action.clearHistory, action.clearCache, action.clearCookies)
             is BrowserAction.SearchHistory -> handleSearchHistory(action.query)
@@ -120,7 +131,11 @@ class BrowserViewModel(
     }
 
     private fun handleLoadUrl(input: String, browseForMe: Boolean) {
-        val resolved = UrlSanitizer.resolveQuery(input, browseForMe = browseForMe)
+        val resolved = UrlSanitizer.resolveQuery(
+            query = input,
+            browseForMe = browseForMe,
+            searchEngine = _uiState.value.selectedSearchEngine
+        )
         val cleaned = UrlSanitizer.cleanUrl(resolved)
         val activeId = _uiState.value.activeTabId
 
@@ -140,11 +155,16 @@ class BrowserViewModel(
 
     private fun handleOpenNewTab(initialUrl: String, openSearchImmediately: Boolean, isPinned: Boolean) {
         val url = if (initialUrl.isNotBlank()) {
-            UrlSanitizer.cleanUrl(UrlSanitizer.resolveQuery(initialUrl))
+            UrlSanitizer.cleanUrl(
+                UrlSanitizer.resolveQuery(
+                    query = initialUrl,
+                    searchEngine = _uiState.value.selectedSearchEngine
+                )
+            )
         } else {
             "https://en.wikipedia.org"
         }
-        val newTab = UiTab(url = url, isPinned = isPinned)
+        val newTab = UiTab(url = url, isPinned = isPinned, isShieldEnabled = _uiState.value.isGlobalShieldEnabled)
 
         _uiState.update { current ->
             current.copy(
@@ -391,6 +411,16 @@ class BrowserViewModel(
         if (clearCache || clearCookies) {
             _effects.tryEmit(NavigationEffect.ClearBrowsingData(clearCache, clearCookies))
         }
+    }
+
+    private fun handleSetSearchEngine(engine: String) {
+        settingsRepository.defaultSearchEngine = engine
+        _uiState.update { it.copy(selectedSearchEngine = engine) }
+    }
+
+    private fun handleSetGlobalShield(enabled: Boolean) {
+        settingsRepository.isGlobalShieldEnabled = enabled
+        _uiState.update { it.copy(isGlobalShieldEnabled = enabled) }
     }
 
     private fun handleSetFindInPageOpen(isOpen: Boolean) {

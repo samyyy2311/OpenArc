@@ -56,6 +56,7 @@ import `in`.caffeinelabs.archie.ui.components.find.FindInPageBar
 import `in`.caffeinelabs.archie.ui.components.history.HistorySheet
 import `in`.caffeinelabs.archie.ui.components.omnibox.BottomOmnibox
 import `in`.caffeinelabs.archie.ui.components.search.SearchModal
+import `in`.caffeinelabs.archie.ui.components.settings.BrowserSettingsSheet
 import `in`.caffeinelabs.archie.ui.components.settings.SiteSettingsSheet
 import `in`.caffeinelabs.archie.ui.components.switcher.TabSwitcher
 import `in`.caffeinelabs.archie.ui.state.BrowserAction
@@ -164,6 +165,7 @@ class MainActivity : ComponentActivity() {
                             pendingPermissionPrompt != null ||
                             state.isFindInPageOpen ||
                             state.isHistoryOpen ||
+                            state.isSettingsOpen ||
                             state.isSiteSettingsOpen ||
                             state.isSearchOpen ||
                             state.isTabSwitcherOpen ||
@@ -182,6 +184,7 @@ class MainActivity : ComponentActivity() {
                         }
                         state.isFindInPageOpen -> viewModel.onAction(BrowserAction.SetFindInPageOpen(false))
                         state.isHistoryOpen -> viewModel.onAction(BrowserAction.SetHistoryOpen(false))
+                        state.isSettingsOpen -> viewModel.onAction(BrowserAction.SetSettingsOpen(false))
                         state.isSiteSettingsOpen -> viewModel.onAction(BrowserAction.SetSiteSettingsOpen(false))
                         state.isSearchOpen -> viewModel.onAction(BrowserAction.SetSearchOpen(false))
                         state.isTabSwitcherOpen -> viewModel.onAction(BrowserAction.SetTabSwitcherOpen(false))
@@ -350,6 +353,11 @@ class MainActivity : ComponentActivity() {
                         )
 
                         HistorySheet(
+                            state = state,
+                            onAction = viewModel::onAction
+                        )
+
+                        BrowserSettingsSheet(
                             state = state,
                             onAction = viewModel::onAction
                         )
