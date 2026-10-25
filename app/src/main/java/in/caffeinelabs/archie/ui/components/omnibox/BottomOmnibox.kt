@@ -1,6 +1,5 @@
-package `in`.caffeinelabs.archie.ui.components
+package `in`.caffeinelabs.archie.ui.components.omnibox
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,7 +8,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,17 +21,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -44,29 +34,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import `in`.caffeinelabs.archie.ui.state.BrowserState
-import `in`.caffeinelabs.archie.ui.state.BrowserViewModel
+import `in`.caffeinelabs.archie.ui.components.TabStackIcon
+import `in`.caffeinelabs.archie.ui.state.BrowserAction
+import `in`.caffeinelabs.archie.ui.state.BrowserUiState
 import `in`.caffeinelabs.archie.ui.theme.ArchieBlue
 import `in`.caffeinelabs.archie.ui.theme.ArchieBorder
 import `in`.caffeinelabs.archie.ui.theme.ArchieDarkBg
 import `in`.caffeinelabs.archie.ui.theme.ArchieDarkPill
-import `in`.caffeinelabs.archie.ui.theme.ArchieDarkSurface
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextMuted
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextPrimary
 import `in`.caffeinelabs.archie.util.UrlSanitizer
 
 @Composable
 fun BottomOmnibox(
-    state: BrowserState,
-    viewModel: BrowserViewModel,
+    state: BrowserUiState,
+    onAction: (BrowserAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val activeTab = state.activeTab
 
     AnimatedVisibility(
@@ -84,85 +72,7 @@ fun BottomOmnibox(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box {
-                DropdownMenu(
-                    expanded = state.isMenuOpen,
-                    onDismissRequest = { viewModel.setMenuOpen(false) },
-                    modifier = Modifier
-                        .background(ArchieDarkSurface)
-                        .border(1.dp, ArchieBorder, RoundedCornerShape(14.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("New Tab", color = ArchieTextPrimary, fontSize = 14.sp) },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Add, contentDescription = null, tint = ArchieTextMuted)
-                        },
-                        onClick = { viewModel.openNewTab(openSearchImmediately = true) }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Reload", color = ArchieTextPrimary, fontSize = 14.sp) },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Refresh, contentDescription = null, tint = ArchieTextMuted)
-                        },
-                        onClick = { viewModel.reload() }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Share Link", color = ArchieTextPrimary, fontSize = 14.sp) },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Share, contentDescription = null, tint = ArchieTextMuted)
-                        },
-                        onClick = {
-                            viewModel.setMenuOpen(false)
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, activeTab.url)
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Link"))
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (activeTab.isPinned) "Unpin Tab" else "Pin Tab",
-                                color = if (activeTab.isPinned) ArchieBlue else ArchieTextPrimary,
-                                fontSize = 14.sp
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.PushPin,
-                                contentDescription = null,
-                                tint = if (activeTab.isPinned) ArchieBlue else ArchieTextMuted
-                            )
-                        },
-                        onClick = {
-                            viewModel.setMenuOpen(false)
-                            viewModel.togglePinTab(activeTab.id)
-                        }
-                    )
-
-                    HorizontalDivider(color = ArchieBorder)
-
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (activeTab.isDesktopMode) "Request Mobile Site" else "Request Desktop Site",
-                                color = if (activeTab.isDesktopMode) ArchieBlue else ArchieTextPrimary,
-                                fontSize = 14.sp
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.DesktopWindows,
-                                contentDescription = null,
-                                tint = if (activeTab.isDesktopMode) ArchieBlue else ArchieTextMuted
-                            )
-                        },
-                        onClick = { viewModel.toggleDesktopMode() }
-                    )
-                }
+                OmniboxMenu(state = state, onAction = onAction)
             }
 
             Box(
@@ -196,7 +106,7 @@ fun BottomOmnibox(
                 ) {
                     TabStackIcon(
                         tabCount = state.tabs.size,
-                        onClick = { viewModel.setTabSwitcherOpen(true) }
+                        onClick = { onAction(BrowserAction.SetTabSwitcherOpen(true)) }
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -212,16 +122,23 @@ fun BottomOmnibox(
                             .clip(pillShape)
                             .background(ArchieDarkBg)
                             .border(1.dp, ArchieBorder, pillShape)
-                            .clickable { viewModel.setSearchOpen(true) }
+                            .clickable { onAction(BrowserAction.SetSearchOpen(true)) }
                             .padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = if (isHttps) "Secure connection" else "Insecure connection",
-                            tint = if (isHttps) ArchieTextMuted else Color(0xFFFF9500),
-                            modifier = Modifier.size(13.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onAction(BrowserAction.SetSiteSettingsOpen(true)) }
+                                .padding(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = if (isHttps) "Secure connection" else "Insecure connection",
+                                tint = if (isHttps) ArchieTextMuted else Color(0xFFFF9500),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
 
                         Spacer(modifier = Modifier.width(8.dp))
 
@@ -234,12 +151,40 @@ fun BottomOmnibox(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+
+                        if (activeTab.isShieldEnabled && activeTab.blockedCount > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(ArchieBlue.copy(alpha = 0.18f))
+                                    .clickable { onAction(BrowserAction.SetSiteSettingsOpen(true)) }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Shield,
+                                        contentDescription = "Shield",
+                                        tint = ArchieBlue,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "${activeTab.blockedCount}",
+                                        color = ArchieBlue,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(4.dp))
 
                     IconButton(
-                        onClick = { viewModel.goBack() },
+                        onClick = { onAction(BrowserAction.GoBack) },
                         enabled = activeTab.canGoBack,
                         modifier = Modifier.size(36.dp)
                     ) {
@@ -252,7 +197,7 @@ fun BottomOmnibox(
                     }
 
                     IconButton(
-                        onClick = { viewModel.setMenuOpen(!state.isMenuOpen) },
+                        onClick = { onAction(BrowserAction.SetMenuOpen(!state.isMenuOpen)) },
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(

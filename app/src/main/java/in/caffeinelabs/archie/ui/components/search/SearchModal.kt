@@ -1,10 +1,8 @@
-package `in`.caffeinelabs.archie.ui.components
+package `in`.caffeinelabs.archie.ui.components.search
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -66,7 +67,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import `in`.caffeinelabs.archie.ui.state.BrowserViewModel
+import `in`.caffeinelabs.archie.ui.state.BrowserAction
+import `in`.caffeinelabs.archie.ui.state.BrowserUiState
 import `in`.caffeinelabs.archie.ui.theme.ArchieBlue
 import `in`.caffeinelabs.archie.ui.theme.ArchieBorder
 import `in`.caffeinelabs.archie.ui.theme.ArchieDarkBg
@@ -75,18 +77,21 @@ import `in`.caffeinelabs.archie.ui.theme.ArchieDarkSurface
 import `in`.caffeinelabs.archie.ui.theme.ArchiePurple
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextMuted
 import `in`.caffeinelabs.archie.ui.theme.ArchieTextPrimary
+import `in`.caffeinelabs.archie.util.UrlSanitizer
 
 @Composable
 fun SearchModal(
-    initialQuery: String,
-    viewModel: BrowserViewModel,
+    state: BrowserUiState,
+    onAction: (BrowserAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var textFieldValue by remember(initialQuery) {
+    val initialQuery = state.activeTab.url
+    var textFieldValue by remember(state.isSearchOpen) {
+        val defaultText = if (initialQuery == "https://en.wikipedia.org" || initialQuery.isBlank()) "" else initialQuery
         mutableStateOf(
             TextFieldValue(
-                text = initialQuery,
-                selection = TextRange(0, initialQuery.length)
+                text = defaultText,
+                selection = TextRange(0, defaultText.length)
             )
         )
     }
@@ -98,16 +103,28 @@ fun SearchModal(
     val clipboardManager = LocalClipboardManager.current
     val clipboardContent = remember { clipboardManager.getText()?.text?.trim() }
 
+    LaunchedEffect(state.isSearchOpen) {
+        if (state.isSearchOpen) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+            onAction(BrowserAction.SearchHistory(""))
+        }
+    }
+
+    LaunchedEffect(textFieldValue.text) {
+        onAction(BrowserAction.SearchHistory(textFieldValue.text))
+    }
+
     fun closeSearch() {
         keyboardController?.hide()
-        viewModel.setSearchOpen(false)
+        onAction(BrowserAction.SetSearchOpen(false))
     }
 
     fun submitQuery(raw: String, browseForMe: Boolean) {
         val trimmed = raw.trim()
         if (trimmed.isNotBlank()) {
             keyboardController?.hide()
-            viewModel.loadUrl(trimmed, browseForMe = browseForMe)
+            onAction(BrowserAction.LoadUrl(trimmed, browseForMe = browseForMe))
         }
     }
 
@@ -147,6 +164,53 @@ fun SearchModal(
                         tint = ArchieTextMuted
                     )
                 }
+            }
+
+            if (state.historySearchResults.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(state.historySearchResults, key = { it.url }) { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { submitQuery(item.url, browseForMe = false) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.History,
+                                contentDescription = null,
+                                tint = ArchieTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (item.title.isNotBlank()) item.title else UrlSanitizer.extractDisplayDomain(item.url),
+                                    color = ArchieTextPrimary,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = item.url,
+                                    color = ArchieTextMuted,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
             }
 
             Column(
@@ -218,45 +282,32 @@ fun SearchModal(
                                     Icon(
                                         imageVector = Icons.Outlined.ContentPaste,
                                         contentDescription = null,
-                                        tint = ArchieTextMuted,
-                                        modifier = Modifier.size(15.dp)
+                                        tint = ArchieBlue,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = ArchieDarkPill,
-                                    labelColor = ArchieTextPrimary
-                                ),
-                                border = AssistChipDefaults.assistChipBorder(
-                                    borderColor = ArchieBorder,
-                                    borderWidth = 1.dp,
-                                    enabled = true
-                                ),
+                                colors = AssistChipDefaults.assistChipColors(containerColor = ArchieDarkPill),
+                                border = AssistChipDefaults.assistChipBorder(enabled = true, borderColor = ArchieBorder),
                                 shape = RoundedCornerShape(18.dp)
                             )
                         }
                     }
                 }
 
-                val pillShape = RoundedCornerShape(26.dp)
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .clip(pillShape)
+                        .clip(RoundedCornerShape(28.dp))
                         .background(ArchieDarkSurface)
-                        .border(
-                            width = if (isBrowseForMe) 1.5.dp else 1.dp,
-                            color = if (isBrowseForMe) ArchiePurple else ArchieBorder,
-                            shape = pillShape
-                        )
-                        .padding(horizontal = 14.dp),
+                        .border(1.dp, ArchieBorder, RoundedCornerShape(28.dp))
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (isBrowseForMe) Icons.Outlined.AutoAwesome else Icons.Outlined.Search,
+                        imageVector = Icons.Outlined.Search,
                         contentDescription = null,
-                        tint = if (isBrowseForMe) ArchiePurple else ArchieTextMuted,
+                        tint = ArchieTextMuted,
                         modifier = Modifier.size(20.dp)
                     )
 
@@ -273,24 +324,26 @@ fun SearchModal(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal
                         ),
-                        cursorBrush = SolidColor(if (isBrowseForMe) ArchiePurple else ArchieBlue),
                         singleLine = true,
+                        cursorBrush = SolidColor(ArchieBlue),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Search
+                            imeAction = ImeAction.Go
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = { submitQuery(textFieldValue.text, isBrowseForMe) }
+                            onGo = { submitQuery(textFieldValue.text, isBrowseForMe) }
                         ),
                         decorationBox = { innerTextField ->
-                            if (textFieldValue.text.isEmpty()) {
-                                Text(
-                                    text = if (isBrowseForMe) "Ask or search with Browse for me..." else "Search or enter URL",
-                                    color = ArchieTextMuted,
-                                    fontSize = 15.sp
-                                )
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (textFieldValue.text.isEmpty()) {
+                                    Text(
+                                        text = "Search or enter URL",
+                                        color = ArchieTextMuted,
+                                        fontSize = 16.sp
+                                    )
+                                }
+                                innerTextField()
                             }
-                            innerTextField()
                         }
                     )
 
@@ -301,37 +354,31 @@ fun SearchModal(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Close,
-                                contentDescription = "Clear text",
+                                contentDescription = "Clear",
                                 tint = ArchieTextMuted,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
+                    }
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(if (isBrowseForMe) ArchiePurple else ArchieBlue)
-                                .clickable { submitQuery(textFieldValue.text, isBrowseForMe) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                                contentDescription = "Go",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                    IconButton(
+                        onClick = { submitQuery(textFieldValue.text, isBrowseForMe) },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (textFieldValue.text.isNotBlank()) ArchieBlue else ArchieDarkPill)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                            contentDescription = "Go",
+                            tint = if (textFieldValue.text.isNotBlank()) Color.White else ArchieTextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
         }
-    }
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-        keyboardController?.show()
     }
 }

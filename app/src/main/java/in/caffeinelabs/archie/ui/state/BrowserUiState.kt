@@ -1,33 +1,37 @@
 package `in`.caffeinelabs.archie.ui.state
 
 import android.graphics.Bitmap
-import android.view.View
+import `in`.caffeinelabs.archie.data.model.HistoryEntity
 import java.util.UUID
 
-data class Tab(
+data class UiTab(
     val id: String = UUID.randomUUID().toString(),
     val url: String = "https://en.wikipedia.org",
     val title: String = "",
     val favicon: Bitmap? = null,
+    val snapshot: Bitmap? = null,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
     val loadingProgress: Int = 0,
     val isLoading: Boolean = false,
-    val isDesktopMode: Boolean = false,
     val isPinned: Boolean = false,
-    val themeColor: Long? = null
+    val isShieldEnabled: Boolean = true,
+    val blockedCount: Int = 0,
+    val isDesktopMode: Boolean = false,
+    val isForceDark: Boolean = false
 )
 
-data class BrowserState(
-    val tabs: List<Tab> = listOf(Tab()),
+data class BrowserUiState(
+    val tabs: List<UiTab> = listOf(UiTab()),
     val activeTabId: String = tabs.first().id,
     val isSearchOpen: Boolean = false,
     val isTabSwitcherOpen: Boolean = false,
     val isMenuOpen: Boolean = false,
+    val isSiteSettingsOpen: Boolean = false,
     val isBrowseForMe: Boolean = false,
-    val customFullscreenView: View? = null,
-    val isOmniboxVisible: Boolean = true
+    val isOmniboxVisible: Boolean = true,
+    val historySearchResults: List<HistoryEntity> = emptyList()
 ) {
-    val activeTab: Tab
-        get() = tabs.find { it.id == activeTabId } ?: tabs.firstOrNull() ?: Tab()
+    val activeTab: UiTab
+        get() = tabs.find { it.id == activeTabId } ?: tabs.firstOrNull() ?: UiTab()
 }

@@ -27,23 +27,51 @@ app/
     ├── AndroidManifest.xml       # SingleTask MainActivity & intent filters
     ├── java/in/caffeinelabs/archie/
     │   ├── ArchieApplication.kt   # WebView debugging init
-    │   ├── MainActivity.kt        # Edge-to-edge Compose host & back handler
+    │   ├── MainActivity.kt        # Edge-to-edge Compose host, engine & back handler
+    │   ├── data/
+    │   │   ├── local/
+    │   │   │   └── TabDatabaseHelper.kt   # SQLite persistence for tabs, pins, and history
+    │   │   ├── model/
+    │   │   │   ├── HistoryEntity.kt       # Visited site record
+    │   │   │   └── TabEntity.kt           # Tab record entity
+    │   │   └── repository/
+    │   │       ├── SettingsRepository.kt  # User preferences store
+    │   │       └── TabRepository.kt       # Single source of truth for tab persistence
+    │   ├── domain/
+    │   │   └── shield/
+    │   │       ├── BlockedCategory.kt     # Ads, tracker & telemetry classification
+    │   │       └── ShieldEngine.kt        # Native domain matching engine
+    │   ├── engine/
+    │   │   ├── ArchieWebChromeClient.kt   # Progress, title, favicon, fullscreen video
+    │   │   ├── ArchieWebViewClient.kt     # Request interception, navigation listener
+    │   │   └── WebEngineManager.kt        # Safe WebView pooling, lifecycle & snapshots
     │   ├── ui/
     │   │   ├── components/
-    │   │   │   ├── BottomOmnibox.kt   # Floating bottom omnibox pill with progress
-    │   │   │   ├── BrowserWebView.kt  # AndroidView WebView wrapper
-    │   │   │   ├── SearchModal.kt     # Fullscreen search overlay with paste chip
-    │   │   │   ├── TabStackIcon.kt    # Dual-tilted card tab counter icon
-    │   │   │   └── TabSwitcher.kt     # Horizontal card carousel tab switcher
+    │   │   │   ├── browser/
+    │   │   │   │   └── BrowserWebView.kt  # AndroidView WebView host
+    │   │   │   ├── omnibox/
+    │   │   │   │   ├── BottomOmnibox.kt   # Floating omnibox pill with progress & shield badge
+    │   │   │   │   └── OmniboxMenu.kt     # Contextual browser actions
+    │   │   │   ├── search/
+    │   │   │   │   └── SearchModal.kt     # Search overlay with history & clipboard chips
+    │   │   │   ├── settings/
+    │   │   │   │   └── SiteSettingsSheet.kt # Shield, desktop site, and force dark controls
+    │   │   │   ├── switcher/
+    │   │   │   │   ├── PinnedTabRow.kt    # Pinned favorites row
+    │   │   │   │   ├── TabCard.kt         # Card with drag-to-dismiss & snapshot preview
+    │   │   │   │   └── TabSwitcher.kt     # Horizontal card carousel tab switcher
+    │   │   │   └── TabStackIcon.kt        # Dual-tilted card tab counter icon
     │   │   ├── state/
-    │   │   │   ├── BrowserState.kt     # UI state data class
-    │   │   │   └── BrowserViewModel.kt # StateFlow & navigation commands
-    │   │   └── theme/
-    │   │       ├── Color.kt           # Dark palette & semantic colors
-    │   │       └── Theme.kt           # Material 3 theme wrapper
+    │   │   │   ├── BrowserAction.kt       # Exhaustive MVI user intents
+    │   │   │   └── BrowserUiState.kt      # Immutable UI state data class
+    │   │   ├── theme/
+    │   │   │   ├── Color.kt               # Dark palette & semantic colors
+    │   │   │   └── Theme.kt               # Material 3 theme wrapper
+    │   │   └── viewmodel/
+    │   │       └── BrowserViewModel.kt    # Lean state holder; zero View/Context leaks
     │   └── util/
-    │       └── UrlSanitizer.kt        # Tracking parameter stripper & domain resolver
-    └── res/                           # App strings, themes, and drawables
+    │       └── UrlSanitizer.kt            # Tracking parameter stripper & domain resolver
+    └── res/                               # App strings, themes, and drawables
 ```
 
 ---
