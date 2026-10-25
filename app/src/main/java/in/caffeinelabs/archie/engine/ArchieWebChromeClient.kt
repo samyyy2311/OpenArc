@@ -3,6 +3,8 @@ package `in`.caffeinelabs.archie.engine
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -17,6 +19,8 @@ interface WebChromeEventListener {
         filePathCallback: ValueCallback<Array<Uri>>?,
         fileChooserParams: WebChromeClient.FileChooserParams?
     ): Boolean
+    fun onPermissionRequest(request: PermissionRequest)
+    fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback)
 }
 
 class ArchieWebChromeClient(
@@ -53,5 +57,24 @@ class ArchieWebChromeClient(
         fileChooserParams: FileChooserParams?
     ): Boolean {
         return listener.onShowFileChooser(filePathCallback, fileChooserParams)
+    }
+
+    override fun onPermissionRequest(request: PermissionRequest?) {
+        if (request != null) {
+            listener.onPermissionRequest(request)
+        } else {
+            super.onPermissionRequest(null)
+        }
+    }
+
+    override fun onGeolocationPermissionsShowPrompt(
+        origin: String?,
+        callback: GeolocationPermissions.Callback?
+    ) {
+        if (origin != null && callback != null) {
+            listener.onGeolocationPermissionsShowPrompt(origin, callback)
+        } else {
+            super.onGeolocationPermissionsShowPrompt(origin, callback)
+        }
     }
 }

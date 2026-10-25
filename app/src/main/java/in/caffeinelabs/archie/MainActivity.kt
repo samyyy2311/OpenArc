@@ -1,10 +1,13 @@
 package `in`.caffeinelabs.archie
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import androidx.activity.ComponentActivity
@@ -21,8 +24,12 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,13 +38,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import `in`.caffeinelabs.archie.domain.shield.BlockedCategory
 import `in`.caffeinelabs.archie.engine.TabEventListener
 import `in`.caffeinelabs.archie.engine.WebChromeEventListener
 import `in`.caffeinelabs.archie.engine.WebEngineManager
+import `in`.caffeinelabs.archie.engine.WebPermissionPrompt
 import `in`.caffeinelabs.archie.engine.WebViewNavigationListener
 import `in`.caffeinelabs.archie.ui.components.browser.BrowserWebView
 import `in`.caffeinelabs.archie.ui.components.find.FindInPageBar
@@ -47,9 +59,14 @@ import `in`.caffeinelabs.archie.ui.components.search.SearchModal
 import `in`.caffeinelabs.archie.ui.components.settings.SiteSettingsSheet
 import `in`.caffeinelabs.archie.ui.components.switcher.TabSwitcher
 import `in`.caffeinelabs.archie.ui.state.BrowserAction
+import `in`.caffeinelabs.archie.ui.theme.ArchieBlue
+import `in`.caffeinelabs.archie.ui.theme.ArchieDarkSurface
+import `in`.caffeinelabs.archie.ui.theme.ArchieTextMuted
+import `in`.caffeinelabs.archie.ui.theme.ArchieTextPrimary
 import `in`.caffeinelabs.archie.ui.theme.ArchieTheme
 import `in`.caffeinelabs.archie.ui.viewmodel.BrowserViewModel
 import `in`.caffeinelabs.archie.ui.viewmodel.NavigationEffect
+import `in`.caffeinelabs.archie.util.UrlSanitizer
 
 class MainActivity : ComponentActivity() {
 
@@ -66,6 +83,16 @@ class MainActivity : ComponentActivity() {
         val uris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
         filePathCallback?.onReceiveValue(uris)
         filePathCallback = null
+    }
+
+    private var pendingPermissionPrompt by mutableStateOf<WebPermissionPrompt?>(null)
+    private var pendingAndroidPermissionCallback: ((Boolean) -> Unit)? = null
+    private val runtimePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.values.all { it }
+        pendingAndroidPermissionCallback?.invoke(allGranted)
+        pendingAndroidPermissionCallback = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,6 +161,7 @@ class MainActivity : ComponentActivity() {
 
                 BackHandler(
                     enabled = customFullscreenView != null ||
+                            pendingPermissionPrompt != null ||
                             state.isFindInPageOpen ||
                             state.isHistoryOpen ||
                             state.isSiteSettingsOpen ||
@@ -144,6 +172,14 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when {
                         customFullscreenView != null -> closeFullscreen()
+                        pendingPermissionPrompt != null -> {
+                            when (val prompt = pendingPermissionPrompt) {
+                                is WebPermissionPrompt.Media -> prompt.request.deny()
+                                is WebPermissionPrompt.Geolocation -> prompt.callback.invoke(prompt.origin, false, false)
+                                null -> {}
+                            }
+                            pendingPermissionPrompt = null
+                        }
                         state.isFindInPageOpen -> viewModel.onAction(BrowserAction.SetFindInPageOpen(false))
                         state.isHistoryOpen -> viewModel.onAction(BrowserAction.SetHistoryOpen(false))
                         state.isSiteSettingsOpen -> viewModel.onAction(BrowserAction.SetSiteSettingsOpen(false))
@@ -223,6 +259,43 @@ class MainActivity : ComponentActivity() {
                                             false
                                         }
                                     }
+
+                                    override fun onPermissionRequest(request: PermissionRequest) {
+                                        val resources = request.resources
+                                        val labels = mutableListOf<String>()
+                                        val androidPerms = mutableListOf<String>()
+
+                                        if (resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                                            labels.add("Camera")
+                                            androidPerms.add(android.Manifest.permission.CAMERA)
+                                        }
+                                        if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                                            labels.add("Microphone")
+                                            androidPerms.add(android.Manifest.permission.RECORD_AUDIO)
+                                        }
+
+                                        if (labels.isEmpty()) {
+                                            request.deny()
+                                            return
+                                        }
+
+                                        pendingPermissionPrompt = WebPermissionPrompt.Media(
+                                            origin = request.origin.toString(),
+                                            request = request,
+                                            humanReadableLabels = labels,
+                                            requiredAndroidPermissions = androidPerms
+                                        )
+                                    }
+
+                                    override fun onGeolocationPermissionsShowPrompt(
+                                        origin: String,
+                                        callback: GeolocationPermissions.Callback
+                                    ) {
+                                        pendingPermissionPrompt = WebPermissionPrompt.Geolocation(
+                                            origin = origin,
+                                            callback = callback
+                                        )
+                                    }
                                 }
 
                                 override fun onScrollDelta(deltaY: Int) {
@@ -281,6 +354,106 @@ class MainActivity : ComponentActivity() {
                             onAction = viewModel::onAction
                         )
 
+                        pendingPermissionPrompt?.let { prompt ->
+                            val displayDomain = UrlSanitizer.extractDisplayDomain(prompt.origin).ifBlank { prompt.origin }
+                            val message = when (prompt) {
+                                is WebPermissionPrompt.Media -> "$displayDomain wants to access your ${prompt.humanReadableLabels.joinToString(" and ")}."
+                                is WebPermissionPrompt.Geolocation -> "$displayDomain wants to access your location."
+                            }
+
+                            AlertDialog(
+                                onDismissRequest = {
+                                    when (prompt) {
+                                        is WebPermissionPrompt.Media -> prompt.request.deny()
+                                        is WebPermissionPrompt.Geolocation -> prompt.callback.invoke(prompt.origin, false, false)
+                                    }
+                                    pendingPermissionPrompt = null
+                                },
+                                title = {
+                                    Text(
+                                        text = "Site Permission",
+                                        color = ArchieTextPrimary,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = message,
+                                        color = ArchieTextPrimary,
+                                        fontSize = 14.sp
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            when (prompt) {
+                                                is WebPermissionPrompt.Media -> {
+                                                    val missing = prompt.requiredAndroidPermissions.filter {
+                                                        ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED
+                                                    }
+                                                    if (missing.isNotEmpty()) {
+                                                        pendingAndroidPermissionCallback = { granted ->
+                                                            if (granted) {
+                                                                prompt.request.grant(prompt.request.resources)
+                                                            } else {
+                                                                prompt.request.deny()
+                                                            }
+                                                        }
+                                                        runtimePermissionLauncher.launch(missing.toTypedArray())
+                                                    } else {
+                                                        prompt.request.grant(prompt.request.resources)
+                                                    }
+                                                }
+                                                is WebPermissionPrompt.Geolocation -> {
+                                                    val fineGranted = ContextCompat.checkSelfPermission(
+                                                        this@MainActivity,
+                                                        android.Manifest.permission.ACCESS_FINE_LOCATION
+                                                    ) == PackageManager.PERMISSION_GRANTED
+                                                    val coarseGranted = ContextCompat.checkSelfPermission(
+                                                        this@MainActivity,
+                                                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                                    ) == PackageManager.PERMISSION_GRANTED
+
+                                                    if (!fineGranted && !coarseGranted) {
+                                                        pendingAndroidPermissionCallback = { granted ->
+                                                            prompt.callback.invoke(prompt.origin, granted, false)
+                                                        }
+                                                        runtimePermissionLauncher.launch(
+                                                            arrayOf(
+                                                                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                                                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                                            )
+                                                        )
+                                                    } else {
+                                                        prompt.callback.invoke(prompt.origin, true, false)
+                                                    }
+                                                }
+                                            }
+                                            pendingPermissionPrompt = null
+                                        }
+                                    ) {
+                                        Text("Allow", color = ArchieBlue, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = {
+                                            when (prompt) {
+                                                is WebPermissionPrompt.Media -> prompt.request.deny()
+                                                is WebPermissionPrompt.Geolocation -> prompt.callback.invoke(prompt.origin, false, false)
+                                            }
+                                            pendingPermissionPrompt = null
+                                        }
+                                    ) {
+                                        Text("Block", color = ArchieTextMuted)
+                                    }
+                                },
+                                containerColor = ArchieDarkSurface,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+
                         customFullscreenView?.let { fullView ->
                             AndroidView(
                                 factory = { fullView },
@@ -328,6 +501,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        when (val prompt = pendingPermissionPrompt) {
+            is WebPermissionPrompt.Media -> prompt.request.deny()
+            is WebPermissionPrompt.Geolocation -> prompt.callback.invoke(prompt.origin, false, false)
+            null -> {}
+        }
+        pendingPermissionPrompt = null
         webEngineManager.destroyAll()
     }
 }
