@@ -2,13 +2,16 @@ package `in`.caffeinelabs.archie
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -37,6 +40,7 @@ import `in`.caffeinelabs.archie.engine.WebChromeEventListener
 import `in`.caffeinelabs.archie.engine.WebEngineManager
 import `in`.caffeinelabs.archie.engine.WebViewNavigationListener
 import `in`.caffeinelabs.archie.ui.components.browser.BrowserWebView
+import `in`.caffeinelabs.archie.ui.components.find.FindInPageBar
 import `in`.caffeinelabs.archie.ui.components.omnibox.BottomOmnibox
 import `in`.caffeinelabs.archie.ui.components.search.SearchModal
 import `in`.caffeinelabs.archie.ui.components.settings.SiteSettingsSheet
@@ -53,6 +57,15 @@ class MainActivity : ComponentActivity() {
 
     private var customFullscreenView by mutableStateOf<View?>(null)
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        filePathCallback?.onReceiveValue(uris)
+        filePathCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,6 +103,17 @@ class MainActivity : ComponentActivity() {
                                     viewModel.onEngineSnapshotCaptured(effect.tabId, snapshot)
                                 }
                             }
+                            is NavigationEffect.FindAll -> {
+                                webEngineManager.findAll(effect.tabId, effect.query) { activeMatch, totalMatches ->
+                                    viewModel.onEngineFindResult(effect.tabId, activeMatch, totalMatches)
+                                }
+                            }
+                            is NavigationEffect.FindNext -> {
+                                webEngineManager.findNext(effect.tabId, effect.forward)
+                            }
+                            is NavigationEffect.ClearFindMatches -> {
+                                webEngineManager.clearMatches(effect.tabId)
+                            }
                         }
                     }
                 }
@@ -106,6 +130,7 @@ class MainActivity : ComponentActivity() {
 
                 BackHandler(
                     enabled = customFullscreenView != null ||
+                            state.isFindInPageOpen ||
                             state.isSiteSettingsOpen ||
                             state.isSearchOpen ||
                             state.isTabSwitcherOpen ||
@@ -114,6 +139,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when {
                         customFullscreenView != null -> closeFullscreen()
+                        state.isFindInPageOpen -> viewModel.onAction(BrowserAction.SetFindInPageOpen(false))
                         state.isSiteSettingsOpen -> viewModel.onAction(BrowserAction.SetSiteSettingsOpen(false))
                         state.isSearchOpen -> viewModel.onAction(BrowserAction.SetSearchOpen(false))
                         state.isTabSwitcherOpen -> viewModel.onAction(BrowserAction.SetTabSwitcherOpen(false))
@@ -147,6 +173,8 @@ class MainActivity : ComponentActivity() {
                                     override fun onTrackerBlocked(url: String, category: BlockedCategory) {
                                         viewModel.onEngineTrackerBlocked(activeTab.id, url, category)
                                     }
+
+                                    override fun onPageError(errorCode: Int, description: String, failingUrl: String) {}
                                 }
 
                                 override val chromeListener = object : WebChromeEventListener {
@@ -169,6 +197,26 @@ class MainActivity : ComponentActivity() {
                                     override fun onHideCustomView() {
                                         hideCustomView()
                                     }
+
+                                    override fun onShowFileChooser(
+                                        filePathCallback: ValueCallback<Array<Uri>>?,
+                                        fileChooserParams: WebChromeClient.FileChooserParams?
+                                    ): Boolean {
+                                        this@MainActivity.filePathCallback?.onReceiveValue(null)
+                                        this@MainActivity.filePathCallback = filePathCallback
+                                        val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                                            addCategory(Intent.CATEGORY_OPENABLE)
+                                            type = "*/*"
+                                        }
+                                        return try {
+                                            fileChooserLauncher.launch(intent)
+                                            true
+                                        } catch (_: Exception) {
+                                            this@MainActivity.filePathCallback?.onReceiveValue(null)
+                                            this@MainActivity.filePathCallback = null
+                                            false
+                                        }
+                                    }
                                 }
 
                                 override fun onScrollDelta(deltaY: Int) {
@@ -185,6 +233,14 @@ class MainActivity : ComponentActivity() {
                         )
 
                         BottomOmnibox(
+                            state = state,
+                            onAction = viewModel::onAction,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                        )
+
+                        FindInPageBar(
                             state = state,
                             onAction = viewModel::onAction,
                             modifier = Modifier
@@ -248,6 +304,13 @@ class MainActivity : ComponentActivity() {
             if (incomingUrl.isNotBlank()) {
                 viewModel.onAction(BrowserAction.OpenNewTab(incomingUrl, openSearchImmediately = false))
             }
+        }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (::webEngineManager.isInitialized) {
+            webEngineManager.onTrimMemory(level)
         }
     }
 

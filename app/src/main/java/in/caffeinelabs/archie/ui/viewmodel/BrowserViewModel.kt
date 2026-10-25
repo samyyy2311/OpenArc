@@ -33,6 +33,9 @@ sealed interface NavigationEffect {
     data class ApplyForceDark(val tabId: String, val enabled: Boolean) : NavigationEffect
     data class DestroyTab(val tabId: String) : NavigationEffect
     data class CaptureSnapshot(val tabId: String) : NavigationEffect
+    data class FindAll(val tabId: String, val query: String) : NavigationEffect
+    data class FindNext(val tabId: String, val forward: Boolean) : NavigationEffect
+    data class ClearFindMatches(val tabId: String) : NavigationEffect
 }
 
 class BrowserViewModel(
@@ -101,6 +104,9 @@ class BrowserViewModel(
             is BrowserAction.SetTabSwitcherOpen -> handleSetTabSwitcherOpen(action.isOpen)
             is BrowserAction.SetMenuOpen -> _uiState.update { it.copy(isMenuOpen = action.isOpen) }
             is BrowserAction.SetSiteSettingsOpen -> _uiState.update { it.copy(isSiteSettingsOpen = action.isOpen, isMenuOpen = false) }
+            is BrowserAction.SetFindInPageOpen -> handleSetFindInPageOpen(action.isOpen)
+            is BrowserAction.SetFindQuery -> handleSetFindQuery(action.query)
+            is BrowserAction.FindNext -> _effects.tryEmit(NavigationEffect.FindNext(_uiState.value.activeTabId, action.forward))
             is BrowserAction.SearchHistory -> handleSearchHistory(action.query)
             is BrowserAction.GoBack -> _effects.tryEmit(NavigationEffect.GoBack(_uiState.value.activeTabId))
             is BrowserAction.GoForward -> _effects.tryEmit(NavigationEffect.GoForward(_uiState.value.activeTabId))
@@ -159,11 +165,18 @@ class BrowserViewModel(
     }
 
     private fun handleSelectTab(tabId: String) {
+        if (_uiState.value.isFindInPageOpen) {
+            _effects.tryEmit(NavigationEffect.ClearFindMatches(_uiState.value.activeTabId))
+        }
         _uiState.update { current ->
             current.copy(
                 activeTabId = tabId,
                 isTabSwitcherOpen = false,
-                isMenuOpen = false
+                isMenuOpen = false,
+                isFindInPageOpen = false,
+                findQuery = "",
+                findCurrentMatch = 0,
+                findTotalMatches = 0
             )
         }
     }
@@ -330,6 +343,52 @@ class BrowserViewModel(
         viewModelScope.launch(ioDispatcher) {
             val results = tabRepository.searchHistory(query)
             _uiState.update { it.copy(historySearchResults = results) }
+        }
+    }
+
+    private fun handleSetFindInPageOpen(isOpen: Boolean) {
+        val activeId = _uiState.value.activeTabId
+        if (!isOpen) {
+            _effects.tryEmit(NavigationEffect.ClearFindMatches(activeId))
+            _uiState.update {
+                it.copy(
+                    isFindInPageOpen = false,
+                    findQuery = "",
+                    findCurrentMatch = 0,
+                    findTotalMatches = 0
+                )
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    isFindInPageOpen = true,
+                    isMenuOpen = false,
+                    isSearchOpen = false,
+                    isSiteSettingsOpen = false
+                )
+            }
+        }
+    }
+
+    private fun handleSetFindQuery(query: String) {
+        val activeId = _uiState.value.activeTabId
+        _uiState.update { it.copy(findQuery = query) }
+        if (query.isBlank()) {
+            _effects.tryEmit(NavigationEffect.ClearFindMatches(activeId))
+            _uiState.update { it.copy(findCurrentMatch = 0, findTotalMatches = 0) }
+        } else {
+            _effects.tryEmit(NavigationEffect.FindAll(activeId, query))
+        }
+    }
+
+    fun onEngineFindResult(tabId: String, activeMatchOrdinal: Int, numberOfMatches: Int) {
+        if (tabId == _uiState.value.activeTabId) {
+            _uiState.update {
+                it.copy(
+                    findCurrentMatch = activeMatchOrdinal,
+                    findTotalMatches = numberOfMatches
+                )
+            }
         }
     }
 

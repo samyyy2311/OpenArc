@@ -1,7 +1,9 @@
 package `in`.caffeinelabs.archie.engine
 
 import android.graphics.Bitmap
+import android.net.Uri
 import android.view.View
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 
@@ -11,6 +13,10 @@ interface WebChromeEventListener {
     fun onFaviconReceived(icon: Bitmap)
     fun onShowCustomView(view: View, callback: WebChromeClient.CustomViewCallback)
     fun onHideCustomView()
+    fun onShowFileChooser(
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: WebChromeClient.FileChooserParams?
+    ): Boolean
 }
 
 class ArchieWebChromeClient(
@@ -39,5 +45,13 @@ class ArchieWebChromeClient(
 
     override fun onHideCustomView() {
         listener.onHideCustomView()
+    }
+
+    override fun onShowFileChooser(
+        webView: WebView?,
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: FileChooserParams?
+    ): Boolean {
+        return listener.onShowFileChooser(filePathCallback, fileChooserParams)
     }
 }

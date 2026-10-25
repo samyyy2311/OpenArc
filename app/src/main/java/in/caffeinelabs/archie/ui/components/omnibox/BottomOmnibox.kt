@@ -58,7 +58,7 @@ fun BottomOmnibox(
     val activeTab = state.activeTab
 
     AnimatedVisibility(
-        visible = state.isOmniboxVisible && !state.isTabSwitcherOpen,
+        visible = state.isOmniboxVisible && !state.isTabSwitcherOpen && !state.isFindInPageOpen,
         enter = slideInVertically(initialOffsetY = { it * 2 }) + fadeIn(),
         exit = slideOutVertically(targetOffsetY = { it * 2 }) + fadeOut(),
         modifier = modifier

@@ -28,6 +28,10 @@ data class BrowserUiState(
     val isTabSwitcherOpen: Boolean = false,
     val isMenuOpen: Boolean = false,
     val isSiteSettingsOpen: Boolean = false,
+    val isFindInPageOpen: Boolean = false,
+    val findQuery: String = "",
+    val findCurrentMatch: Int = 0,
+    val findTotalMatches: Int = 0,
     val isBrowseForMe: Boolean = false,
     val isOmniboxVisible: Boolean = true,
     val historySearchResults: List<HistoryEntity> = emptyList()

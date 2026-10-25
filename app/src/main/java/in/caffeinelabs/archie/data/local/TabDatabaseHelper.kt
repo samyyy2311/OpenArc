@@ -11,7 +11,7 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
 
     companion object {
         const val DATABASE_NAME = "archie_browser.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
 
         const val TABLE_TABS = "tabs"
         const val COL_TAB_ID = "id"
@@ -58,6 +58,8 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
             )
             """.trimIndent()
         )
+
+        createIndices(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -66,9 +68,7 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
                 db.execSQL("ALTER TABLE $TABLE_TABS ADD COLUMN $COL_TAB_IS_SHIELD_ENABLED INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE $TABLE_TABS ADD COLUMN $COL_TAB_IS_DESKTOP_MODE INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE $TABLE_TABS ADD COLUMN $COL_TAB_IS_FORCE_DARK INTEGER NOT NULL DEFAULT 0")
-            } catch (_: Exception) {
-                // Table might be reconstructed
-            }
+            } catch (_: Exception) {}
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS $TABLE_HISTORY (
@@ -80,6 +80,14 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
                 """.trimIndent()
             )
         }
+        if (oldVersion < 3) {
+            createIndices(db)
+        }
+    }
+
+    private fun createIndices(db: SQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tabs_lookup ON $TABLE_TABS ($COL_TAB_IS_ARCHIVED, $COL_TAB_IS_PINNED, $COL_TAB_LAST_SELECTED)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_history_lookup ON $TABLE_HISTORY ($COL_HIST_LAST_VISITED DESC)")
     }
 
     fun getAllActiveTabs(): List<TabEntity> {
@@ -127,75 +135,117 @@ class TabDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
 
     fun upsertTab(tab: TabEntity) {
         val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COL_TAB_ID, tab.id)
-            put(COL_TAB_URL, tab.url)
-            put(COL_TAB_TITLE, tab.title)
-            put(COL_TAB_LAST_SELECTED, tab.lastSelectedTimestamp)
-            put(COL_TAB_IS_PINNED, if (tab.isPinned) 1 else 0)
-            put(COL_TAB_IS_ARCHIVED, if (tab.isArchived) 1 else 0)
-            put(COL_TAB_IS_SHIELD_ENABLED, if (tab.isShieldEnabled) 1 else 0)
-            put(COL_TAB_IS_DESKTOP_MODE, if (tab.isDesktopMode) 1 else 0)
-            put(COL_TAB_IS_FORCE_DARK, if (tab.isForceDark) 1 else 0)
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put(COL_TAB_ID, tab.id)
+                put(COL_TAB_URL, tab.url)
+                put(COL_TAB_TITLE, tab.title)
+                put(COL_TAB_LAST_SELECTED, tab.lastSelectedTimestamp)
+                put(COL_TAB_IS_PINNED, if (tab.isPinned) 1 else 0)
+                put(COL_TAB_IS_ARCHIVED, if (tab.isArchived) 1 else 0)
+                put(COL_TAB_IS_SHIELD_ENABLED, if (tab.isShieldEnabled) 1 else 0)
+                put(COL_TAB_IS_DESKTOP_MODE, if (tab.isDesktopMode) 1 else 0)
+                put(COL_TAB_IS_FORCE_DARK, if (tab.isForceDark) 1 else 0)
+            }
+            db.insertWithOnConflict(TABLE_TABS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.insertWithOnConflict(TABLE_TABS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun updateTabMetadata(id: String, url: String, title: String) {
         val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COL_TAB_URL, url)
-            put(COL_TAB_TITLE, title)
-            put(COL_TAB_LAST_SELECTED, System.currentTimeMillis())
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put(COL_TAB_URL, url)
+                put(COL_TAB_TITLE, title)
+                put(COL_TAB_LAST_SELECTED, System.currentTimeMillis())
+            }
+            db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
     }
 
     fun setTabPinned(id: String, isPinned: Boolean) {
         val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COL_TAB_IS_PINNED, if (isPinned) 1 else 0)
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put(COL_TAB_IS_PINNED, if (isPinned) 1 else 0)
+            }
+            db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
     }
 
     fun updateTabPreferences(id: String, isShieldEnabled: Boolean, isDesktopMode: Boolean, isForceDark: Boolean) {
         val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COL_TAB_IS_SHIELD_ENABLED, if (isShieldEnabled) 1 else 0)
-            put(COL_TAB_IS_DESKTOP_MODE, if (isDesktopMode) 1 else 0)
-            put(COL_TAB_IS_FORCE_DARK, if (isForceDark) 1 else 0)
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put(COL_TAB_IS_SHIELD_ENABLED, if (isShieldEnabled) 1 else 0)
+                put(COL_TAB_IS_DESKTOP_MODE, if (isDesktopMode) 1 else 0)
+                put(COL_TAB_IS_FORCE_DARK, if (isForceDark) 1 else 0)
+            }
+            db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.update(TABLE_TABS, values, "$COL_TAB_ID = ?", arrayOf(id))
     }
 
     fun deleteTab(id: String) {
         val db = writableDatabase
-        db.delete(TABLE_TABS, "$COL_TAB_ID = ?", arrayOf(id))
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_TABS, "$COL_TAB_ID = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun archiveNonPinnedTabs() {
         val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COL_TAB_IS_ARCHIVED, 1)
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put(COL_TAB_IS_ARCHIVED, 1)
+            }
+            db.update(TABLE_TABS, values, "$COL_TAB_IS_PINNED = 0", null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.update(TABLE_TABS, values, "$COL_TAB_IS_PINNED = 0", null)
     }
 
     fun recordHistoryVisit(url: String, title: String) {
         if (url.isBlank() || url.startsWith("about:") || url.startsWith("data:")) return
         val db = writableDatabase
-        db.execSQL(
-            """
-            INSERT INTO $TABLE_HISTORY ($COL_HIST_URL, $COL_HIST_TITLE, $COL_HIST_VISIT_COUNT, $COL_HIST_LAST_VISITED)
-            VALUES (?, ?, 1, ?)
-            ON CONFLICT($COL_HIST_URL) DO UPDATE SET
-                $COL_HIST_TITLE = excluded.$COL_HIST_TITLE,
-                $COL_HIST_VISIT_COUNT = $COL_HIST_VISIT_COUNT + 1,
-                $COL_HIST_LAST_VISITED = excluded.$COL_HIST_LAST_VISITED
-            """.trimIndent(),
-            arrayOf(url, title, System.currentTimeMillis())
-        )
+        db.beginTransaction()
+        try {
+            db.execSQL(
+                """
+                INSERT INTO $TABLE_HISTORY ($COL_HIST_URL, $COL_HIST_TITLE, $COL_HIST_VISIT_COUNT, $COL_HIST_LAST_VISITED)
+                VALUES (?, ?, 1, ?)
+                ON CONFLICT($COL_HIST_URL) DO UPDATE SET
+                    $COL_HIST_TITLE = excluded.$COL_HIST_TITLE,
+                    $COL_HIST_VISIT_COUNT = $COL_HIST_VISIT_COUNT + 1,
+                    $COL_HIST_LAST_VISITED = excluded.$COL_HIST_LAST_VISITED
+                """.trimIndent(),
+                arrayOf(url, title, System.currentTimeMillis())
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun searchHistory(query: String, limit: Int = 20): List<HistoryEntity> {

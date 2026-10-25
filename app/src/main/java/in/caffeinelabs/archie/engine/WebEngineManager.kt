@@ -19,7 +19,9 @@ interface TabEventListener {
 
 class WebEngineManager(
     private val context: Context,
-    private val shieldEngine: ShieldEngine = ShieldEngine()
+    private val shieldEngine: ShieldEngine = ShieldEngine(),
+    val snapshotManager: SnapshotManager = SnapshotManager(context),
+    private val downloadHandler: DownloadHandler = DownloadHandler(context)
 ) {
     companion object {
         const val DESKTOP_USER_AGENT =
@@ -70,6 +72,10 @@ class WebEngineManager(
                 if (isForceDark && WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
                     WebSettingsCompat.setForceDark(this, WebSettingsCompat.FORCE_DARK_ON)
                 }
+            }
+
+            setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+                downloadHandler.handleDownload(url, userAgent, contentDisposition, mimetype, contentLength)
             }
 
             webViewClient = ArchieWebViewClient(
@@ -142,8 +148,10 @@ class WebEngineManager(
     }
 
     fun captureSnapshot(tabId: String): Bitmap? {
-        val webView = webViewPool[tabId] ?: return null
-        if (webView.width <= 0 || webView.height <= 0) return null
+        val webView = webViewPool[tabId] ?: return snapshotManager.getSnapshot(tabId)
+        if (webView.width <= 0 || webView.height <= 0) {
+            return snapshotManager.getSnapshot(tabId)
+        }
 
         return try {
             val scale = 0.5f
@@ -153,13 +161,35 @@ class WebEngineManager(
             val canvas = Canvas(bitmap)
             canvas.scale(scale, scale)
             webView.draw(canvas)
+            snapshotManager.saveSnapshot(tabId, bitmap)
             bitmap
         } catch (_: Exception) {
-            null
+            snapshotManager.getSnapshot(tabId)
         }
     }
 
+    fun getCachedSnapshot(tabId: String): Bitmap? {
+        return snapshotManager.getSnapshot(tabId)
+    }
+
+    fun findAll(tabId: String, query: String, onFindResult: (activeMatchOrdinal: Int, numberOfMatches: Int) -> Unit) {
+        val webView = webViewPool[tabId] ?: return
+        webView.setFindListener { activeMatchOrdinal, numberOfMatches, _ ->
+            onFindResult(activeMatchOrdinal, numberOfMatches)
+        }
+        webView.findAllAsync(query)
+    }
+
+    fun findNext(tabId: String, forward: Boolean) {
+        webViewPool[tabId]?.findNext(forward)
+    }
+
+    fun clearMatches(tabId: String) {
+        webViewPool[tabId]?.clearMatches()
+    }
+
     fun destroyTab(tabId: String) {
+        snapshotManager.removeSnapshot(tabId)
         webViewPool.remove(tabId)?.apply {
             stopLoading()
             destroy()
@@ -180,7 +210,18 @@ class WebEngineManager(
         }
     }
 
+    fun onTrimMemory(level: Int) {
+        snapshotManager.trimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            webViewPool.values.forEach {
+                it.freeMemory()
+                it.clearCache(false)
+            }
+        }
+    }
+
     fun destroyAll() {
+        snapshotManager.clearAll()
         webViewPool.values.forEach {
             it.stopLoading()
             it.destroy()

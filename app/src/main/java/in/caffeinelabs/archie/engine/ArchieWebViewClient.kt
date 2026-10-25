@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -18,6 +19,7 @@ interface WebViewNavigationListener {
     fun onPageFinished(url: String)
     fun onHistoryChanged(canGoBack: Boolean, canGoForward: Boolean)
     fun onTrackerBlocked(url: String, category: BlockedCategory)
+    fun onPageError(errorCode: Int, description: String, failingUrl: String)
 }
 
 class ArchieWebViewClient(
@@ -86,6 +88,18 @@ class ArchieWebViewClient(
         return super.shouldInterceptRequest(view, request)
     }
 
+    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+        if (request?.isForMainFrame == true) {
+            val failingUrl = request.url.toString()
+            val description = error?.description?.toString() ?: "Unable to connect"
+            val errorCode = error?.errorCode ?: -1
+            listener.onPageError(errorCode, description, failingUrl)
+
+            val errorHtml = generateErrorHtml(failingUrl, description)
+            view?.loadDataWithBaseURL(failingUrl, errorHtml, "text/html", "UTF-8", null)
+        }
+    }
+
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         url?.let { listener.onPageStarted(it, favicon) }
         view?.let { listener.onHistoryChanged(it.canGoBack(), it.canGoForward()) }
@@ -98,5 +112,72 @@ class ArchieWebViewClient(
 
     override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
         view?.let { listener.onHistoryChanged(it.canGoBack(), it.canGoForward()) }
+    }
+
+    private fun generateErrorHtml(url: String, description: String): String {
+        val domain = UrlSanitizer.extractDisplayDomain(url).ifBlank { "Page" }
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                <style>
+                    body {
+                        background-color: #131418;
+                        color: #F0F1F5;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        margin: 0;
+                        padding: 32px 24px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 80vh;
+                        box-sizing: border-box;
+                        text-align: center;
+                    }
+                    .icon {
+                        width: 48px;
+                        height: 48px;
+                        margin-bottom: 20px;
+                        stroke: #8E909A;
+                    }
+                    h1 {
+                        font-size: 20px;
+                        font-weight: 600;
+                        margin: 0 0 10px 0;
+                    }
+                    p {
+                        color: #8E909A;
+                        font-size: 14px;
+                        line-height: 1.5;
+                        margin: 0 0 28px 0;
+                        max-width: 320px;
+                    }
+                    .btn {
+                        background-color: #007AFF;
+                        color: #FFFFFF;
+                        border: none;
+                        border-radius: 20px;
+                        padding: 12px 28px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        text-decoration: none;
+                    }
+                </style>
+            </head>
+            <body>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <h1>Unable to load $domain</h1>
+                <p>$description. Check your internet connection and try again.</p>
+                <button class="btn" onclick="location.reload()">Try Again</button>
+            </body>
+            </html>
+        """.trimIndent()
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
@@ -78,6 +79,17 @@ fun OmniboxMenu(
                     putExtra(Intent.EXTRA_TEXT, activeTab.url)
                 }
                 context.startActivity(Intent.createChooser(shareIntent, "Share Link"))
+            }
+        )
+
+        DropdownMenuItem(
+            text = { Text("Find in Page", color = ArchieTextPrimary, fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(Icons.Outlined.Search, contentDescription = null, tint = ArchieTextMuted)
+            },
+            onClick = {
+                onAction(BrowserAction.SetMenuOpen(false))
+                onAction(BrowserAction.SetFindInPageOpen(true))
             }
         )
 

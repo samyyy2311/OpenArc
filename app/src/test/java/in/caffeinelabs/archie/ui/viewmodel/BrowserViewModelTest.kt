@@ -169,4 +169,28 @@ class BrowserViewModelTest {
 
         assertEquals(!initial, viewModel.uiState.value.activeTab.isShieldEnabled)
     }
+
+    @Test
+    fun onAction_setFindInPageOpen_updatesState() = runTest {
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isFindInPageOpen)
+
+        viewModel.onAction(BrowserAction.SetFindInPageOpen(true))
+        assertTrue(viewModel.uiState.value.isFindInPageOpen)
+
+        viewModel.onAction(BrowserAction.SetFindInPageOpen(false))
+        assertFalse(viewModel.uiState.value.isFindInPageOpen)
+    }
+
+    @Test
+    fun onAction_setFindQuery_and_onEngineFindResult_updatesMatchCount() = runTest {
+        advanceUntilIdle()
+        viewModel.onAction(BrowserAction.SetFindInPageOpen(true))
+        viewModel.onAction(BrowserAction.SetFindQuery("kotlin"))
+        assertEquals("kotlin", viewModel.uiState.value.findQuery)
+
+        viewModel.onEngineFindResult(viewModel.uiState.value.activeTabId, activeMatchOrdinal = 2, numberOfMatches = 5)
+        assertEquals(2, viewModel.uiState.value.findCurrentMatch)
+        assertEquals(5, viewModel.uiState.value.findTotalMatches)
+    }
 }
